@@ -11,6 +11,10 @@
 - ✅ **Поддержка BSL файлов** - автоматическое добавление XML объектов при изменении модулей
 - ✅ Создание файла списка для частичной загрузки
 - ✅ Выполнение команды `/LoadConfigFromFiles` с параметром `-partial`
+- ✅ **Автоматическое обновление конфигурации БД** - опциональное обновление после загрузки
+- ✅ **Запуск в режиме 1С:Предприятие** - автоматический запуск после загрузки
+- ✅ **Поддержка навигационных ссылок** - открытие конкретного объекта после старта
+- ✅ **Запуск внешних обработок** - возможность запуска обработки после старта
 - ✅ Поддержка обоих форматов выгрузки (Hierarchical/Plain)
 - ✅ Подробное логирование процесса
 - ✅ Режим отладки
@@ -52,6 +56,30 @@
     -InfoBasePath "C:\Bases\MyBase" `
     -V8Path "C:\Program Files\1cv8\8.3.27.1859\bin\1cv8.exe" `
     -DebugMode
+
+# С автоматическим обновлением конфигурации БД
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\edt\IB\ERP_2.5.12.73" `
+    -ConfigDir "src" `
+    -UserName "Администратор" `
+    -UpdateDB
+
+# С запуском в режиме 1С:Предприятие
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -RunEnterprise
+
+# С открытием конкретного объекта
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -RunEnterprise `
+    -NavigationLink "e1cib/data/Catalog.Items"
+
+# С запуском внешней обработки
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -RunEnterprise `
+    -ExternalDataProcessor "C:\DataProcessors\MyProcessor.epf"
 ```
 
 ### CMD
@@ -97,6 +125,10 @@ partial-load-config.cmd feature/new-report ^
 | `V8Path` / `/v8` | `1cv8.exe` | Путь к исполняемому файлу платформы (если не указан, ищется в PATH) |
 | `OutFile` / `/out` | temp файл | Файл для вывода служебных сообщений |
 | `DebugMode` / `/debug` | - | Включить режим отладки |
+| `UpdateDB` | - | Автоматически обновить конфигурацию БД после загрузки |
+| `RunEnterprise` | - | Запустить 1С:Предприятие после загрузки |
+| `NavigationLink` | - | Навигационная ссылка для открытия объекта (требует `-RunEnterprise`) |
+| `ExternalDataProcessor` | - | Путь к внешней обработке для запуска (требует `-RunEnterprise`) |
 
 ## Как это работает
 
@@ -226,11 +258,49 @@ $arguments += "-Extension", "`"MyExtension`""
 
 ### Автоматическое обновление БД
 
-Добавить после загрузки:
+**Реализовано!** Используйте параметр `-UpdateDB`:
 
 ```powershell
-$arguments = @("DESIGNER", "/UpdateDBCfg")
-# ... остальные параметры
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -UpdateDB
+```
+
+### Запуск в режиме 1С:Предприятие
+
+**Реализовано!** Используйте параметр `-RunEnterprise`:
+
+```powershell
+# Простой запуск
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -RunEnterprise
+
+# С открытием конкретного объекта
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -RunEnterprise `
+    -NavigationLink "e1cib/data/Catalog.Items"
+
+# С запуском внешней обработки
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -RunEnterprise `
+    -ExternalDataProcessor "C:\Tools\MyProcessor.epf"
+```
+
+### Комплексный сценарий
+
+Загрузка, обновление БД и запуск с открытием объекта:
+
+```powershell
+.\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\edt\IB\ERP_2.5.12.73" `
+    -ConfigDir "src" `
+    -UserName "Администратор" `
+    -UpdateDB `
+    -RunEnterprise `
+    -NavigationLink "e1cib/data/Document.SalesOrder"
 ```
 
 ## Устранение неполадок
@@ -260,6 +330,13 @@ $arguments = @("DESIGNER", "/UpdateDBCfg")
 - Параметр `/LoadConfigFromFiles` (строка 1070 в документации)
 
 ## История изменений
+
+### Версия 3.0 (ноябрь 2024)
+- ✅ **Автоматическое обновление конфигурации БД** (`-UpdateDB`)
+- ✅ **Запуск в режиме 1С:Предприятие** (`-RunEnterprise`)
+- ✅ **Поддержка навигационных ссылок** (`-NavigationLink`)
+- ✅ **Запуск внешних обработок** (`-ExternalDataProcessor`)
+- ✅ Комплексные сценарии: загрузка + обновление + запуск
 
 ### Версия 2.0 (ноябрь 2024)
 - ✅ Добавлена поддержка BSL файлов

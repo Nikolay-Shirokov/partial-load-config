@@ -37,11 +37,29 @@
 .PARAMETER DebugMode
     Debug mode with additional output
 
+.PARAMETER UpdateDB
+    Update database configuration after loading
+
+.PARAMETER RunEnterprise
+    Run 1C:Enterprise in user mode after loading
+
+.PARAMETER NavigationLink
+    Navigation link to open in 1C:Enterprise (requires -RunEnterprise)
+
+.PARAMETER ExternalDataProcessor
+    Path to external data processor to run (requires -RunEnterprise)
+
 .EXAMPLE
     .\partial-load-config.ps1 -CommitId "a3f5b21" -InfoBasePath "C:\Bases\MyBase" -UserName "Admin"
 
 .EXAMPLE
     .\partial-load-config.ps1 -CommitId "HEAD~1" -InfoBaseName "MyBase" -ConfigDir ".\src"
+
+.EXAMPLE
+    .\partial-load-config.ps1 -CommitId "HEAD" -InfoBasePath "C:\Bases\MyBase" -UpdateDB
+
+.EXAMPLE
+    .\partial-load-config.ps1 -CommitId "HEAD" -InfoBasePath "C:\Bases\MyBase" -RunEnterprise -NavigationLink "e1cib/data/Catalog.Items"
 
 .NOTES
     Требует: git, 1cv8.exe
@@ -78,7 +96,19 @@ param(
     [string]$OutFile,
     
     [Parameter(Mandatory=$false)]
-    [switch]$DebugMode
+    [switch]$DebugMode,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UpdateDB,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$RunEnterprise,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$NavigationLink,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$ExternalDataProcessor
 )
 
 # Установка кодировки консоли
@@ -160,6 +190,12 @@ try {
         
         if ($file -like "$configDirNormalized/*" -or $file -like "$configDirNormalized\*") {
             $relativePath = $file -replace "^$configDirNormalized[\\/]", ""
+            
+            # Пропускаем служебные файлы
+            if ($relativePath -eq "ConfigDumpInfo.xml") {
+                Write-DebugInfo "Skipped service file: $relativePath"
+                continue
+            }
             
             if ($file -match '\.xml$') {
                 $fullPath = Join-Path $ConfigDir $relativePath
@@ -279,6 +315,104 @@ try {
         Write-Host "--- Execution log ---" -ForegroundColor Yellow
         Get-Content $OutFile | Write-Host
         Write-Host "--- End of log ---" -ForegroundColor Yellow
+    }
+    
+    # Обновление конфигурации БД если запрошено
+    if ($UpdateDB -and $exitCode -eq 0) {
+        Write-Host ""
+        Write-Host "Updating database configuration..." -ForegroundColor Green
+        
+        $updateArguments = @("DESIGNER")
+        
+        # Параметры подключения к ИБ
+        if ($InfoBaseName) {
+            $updateArguments += "/IBName", "`"$InfoBaseName`""
+        } else {
+            $updateArguments += "/F", "`"$InfoBasePath`""
+        }
+        
+        # Учетные данные
+        if ($UserName) { $updateArguments += "/N", "`"$UserName`"" }
+        if ($Password) { $updateArguments += "/P", "`"$Password`"" }
+        
+        # Команда обновления
+        $updateArguments += "/UpdateDBCfg"
+        $updateArguments += "/DisableStartupDialogs"
+        
+        # Файл вывода
+        $updateOutFile = Join-Path $tempDir "update_log.txt"
+        $updateArguments += "/Out", "`"$updateOutFile`""
+        
+        if ($DebugMode) {
+            $updateCmdLine = "$V8Path $($updateArguments -join ' ')"
+            Write-DebugInfo "Update command: $updateCmdLine"
+        }
+        
+        $updateProcess = Start-Process -FilePath $V8Path `
+                                      -ArgumentList $updateArguments `
+                                      -NoNewWindow `
+                                      -Wait `
+                                      -PassThru
+        
+        $updateExitCode = $updateProcess.ExitCode
+        
+        Write-Host ""
+        if ($updateExitCode -eq 0) {
+            Write-Host "Database configuration updated successfully" -ForegroundColor Green
+        } else {
+            Write-Host "Error updating database configuration (code: $updateExitCode)" -ForegroundColor Red
+            $exitCode = $updateExitCode
+        }
+        
+        if (Test-Path $updateOutFile) {
+            Write-Host ""
+            Write-Host "--- Update log ---" -ForegroundColor Yellow
+            Get-Content $updateOutFile | Write-Host
+            Write-Host "--- End of update log ---" -ForegroundColor Yellow
+        }
+    }
+    
+    # Запуск в режиме 1С:Предприятие если запрошено
+    if ($RunEnterprise -and $exitCode -eq 0) {
+        Write-Host ""
+        Write-Host "Starting 1C:Enterprise..." -ForegroundColor Green
+        
+        $enterpriseArguments = @("ENTERPRISE")
+        
+        # Параметры подключения к ИБ
+        if ($InfoBaseName) {
+            $enterpriseArguments += "/IBName", "`"$InfoBaseName`""
+        } else {
+            $enterpriseArguments += "/F", "`"$InfoBasePath`""
+        }
+        
+        # Учетные данные
+        if ($UserName) { $enterpriseArguments += "/N", "`"$UserName`"" }
+        if ($Password) { $enterpriseArguments += "/P", "`"$Password`"" }
+        
+        # Навигационная ссылка
+        if ($NavigationLink) {
+            $enterpriseArguments += "/URL", "`"$NavigationLink`""
+        }
+        
+        # Внешняя обработка
+        if ($ExternalDataProcessor) {
+            if (Test-Path $ExternalDataProcessor) {
+                $enterpriseArguments += "/Execute", "`"$ExternalDataProcessor`""
+            } else {
+                Write-Host "Warning: External data processor not found: $ExternalDataProcessor" -ForegroundColor Yellow
+            }
+        }
+        
+        if ($DebugMode) {
+            $enterpriseCmdLine = "$V8Path $($enterpriseArguments -join ' ')"
+            Write-DebugInfo "Enterprise command: $enterpriseCmdLine"
+        }
+        
+        # Запуск в обычном режиме (неблокирующий)
+        Start-Process -FilePath $V8Path -ArgumentList $enterpriseArguments
+        
+        Write-Host "1C:Enterprise started" -ForegroundColor Green
     }
     
     exit $exitCode

@@ -20,6 +20,10 @@ REM   /format <fmt>   - Формат конфигурации: Hierarchical ил
 REM   /v8 <path>      - Путь к 1cv8.exe (по умолчанию: ищется в PATH)
 REM   /out <file>     - Файл для вывода служебных сообщений
 REM   /debug          - Режим отладки (вывод дополнительной информации)
+REM   /updatedb       - Обновить конфигурацию БД после загрузки
+REM   /run            - Запустить 1С:Предприятие после загрузки
+REM   /navlink <url>  - Навигационная ссылка для запуска
+REM   /runep <path>   - Путь к внешней обработке для запуска
 REM
 REM ============================================================================
 
@@ -34,6 +38,10 @@ set "CONFIG_FORMAT=Hierarchical"
 set "V8_PATH=1cv8.exe"
 set "OUT_FILE="
 set "DEBUG_MODE=0"
+set "UPDATE_DB=0"
+set "RUN_ENTERPRISE=0"
+set "NAVIGATION_LINK="
+set "EXTERNAL_DATA_PROCESSOR="
 set "TEMP_DIR=%TEMP%\1c_partial_load_%RANDOM%"
 set "LIST_FILE=%TEMP_DIR%\load_list.txt"
 
@@ -90,6 +98,28 @@ if "%~1"=="/out" (
 )
 if "%~1"=="/debug" (
     set "DEBUG_MODE=1"
+    shift
+    goto parse_args
+)
+if "%~1"=="/updatedb" (
+    set "UPDATE_DB=1"
+    shift
+    goto parse_args
+)
+if "%~1"=="/run" (
+    set "RUN_ENTERPRISE=1"
+    shift
+    goto parse_args
+)
+if "%~1"=="/navlink" (
+    set "NAVIGATION_LINK=%~2"
+    shift
+    shift
+    goto parse_args
+)
+if "%~1"=="/runep" (
+    set "EXTERNAL_DATA_PROCESSOR=%~2"
+    shift
     shift
     goto parse_args
 )
@@ -212,9 +242,12 @@ for /f "usebackq delims=" %%f in ("!TEMP_DIR!\changed_files.txt") do (
 
 REM Убираем дубликаты и создаем финальный список
 if exist "!TEMP_LIST!" (
-    sort "!TEMP_LIST!" | findstr /v "^$" > "!LIST_FILE!"
+    (for /f "usebackq delims=" %%i in ("!TEMP_LIST!") do echo %%i) | sort | uniq > "!LIST_FILE!"
     del "!TEMP_LIST!"
 )
+
+set "FILE_COUNT=0"
+for /f %%i in ('type "!LIST_FILE!" ^| find /c /v ""') do set "FILE_COUNT=%%i"
 
 if "!FILE_COUNT!"=="0" (
     echo No configuration files found for loading in commit !COMMIT_ID!
@@ -284,6 +317,87 @@ if exist "!OUT_FILE!" (
     echo --- End of log ---
 )
 
+if "!EXIT_CODE!" NEQ "0" goto cleanup
+
+REM Обновление конфигурации БД
+if "!UPDATE_DB!"=="1" (
+    echo.
+    echo Updating database configuration...
+    
+    set "UPDATE_CMD="!V8_PATH!" DESIGNER"
+    if not "!IB_NAME!"=="" (
+        set "UPDATE_CMD=!UPDATE_CMD! /IBName "!IB_NAME!""
+    ) else (
+        set "UPDATE_CMD=!UPDATE_CMD! /F "!IB_PATH!""
+    )
+    if not "!USER_NAME!"=="" set "UPDATE_CMD=!UPDATE_CMD! /N "!USER_NAME!""
+    if not "!USER_PWD!"=="" set "UPDATE_CMD=!UPDATE_CMD! /P "!USER_PWD!""
+    
+    set "UPDATE_CMD=!UPDATE_CMD! /UpdateDBCfg"
+    set "UPDATE_CMD=!UPDATE_CMD! /DisableStartupDialogs"
+    
+    set "UPDATE_OUT=!TEMP_DIR!\update_log.txt"
+    set "UPDATE_CMD=!UPDATE_CMD! /Out "!UPDATE_OUT!""
+    
+    if "!DEBUG_MODE!"=="1" (
+        echo [DEBUG] Update command: !UPDATE_CMD!
+    )
+    
+    !UPDATE_CMD!
+    set "UPDATE_EXIT_CODE=!errorlevel!"
+    
+    echo.
+    if "!UPDATE_EXIT_CODE!"=="0" (
+        echo Database configuration updated successfully
+    ) else (
+        echo Error updating database configuration ^(code: !UPDATE_EXIT_CODE!^)
+        set "EXIT_CODE=!UPDATE_EXIT_CODE!"
+    )
+    
+    if exist "!UPDATE_OUT!" (
+        echo.
+        echo --- Update log ---
+        type "!UPDATE_OUT!"
+        echo --- End of update log ---
+    )
+    
+    if "!EXIT_CODE!" NEQ "0" goto cleanup
+)
+
+REM Запуск 1С:Предприятие
+if "!RUN_ENTERPRISE!"=="1" (
+    echo.
+    echo Starting 1C:Enterprise...
+    
+    set "ENTERPRISE_CMD="!V8_PATH!" ENTERPRISE"
+    if not "!IB_NAME!"=="" (
+        set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /IBName "!IB_NAME!""
+    ) else (
+        set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /F "!IB_PATH!""
+    )
+    if not "!USER_NAME!"=="" set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /N "!USER_NAME!""
+    if not "!USER_PWD!"=="" set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /P "!USER_PWD!""
+    
+    if not "!NAVIGATION_LINK!"=="" (
+        set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /URL "!NAVIGATION_LINK!""
+    )
+    
+    if not "!EXTERNAL_DATA_PROCESSOR!"=="" (
+        if exist "!EXTERNAL_DATA_PROCESSOR!" (
+            set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /Execute "!EXTERNAL_DATA_PROCESSOR!""
+        ) else (
+            echo Warning: External data processor not found: !EXTERNAL_DATA_PROCESSOR!
+        )
+    )
+    
+    if "!DEBUG_MODE!"=="1" (
+        echo [DEBUG] Enterprise command: !ENTERPRISE_CMD!
+    )
+    
+    start "" !ENTERPRISE_CMD!
+    echo 1C:Enterprise started
+)
+
 :cleanup
 REM Очистка временных файлов
 if "!DEBUG_MODE!"=="0" (
@@ -310,9 +424,15 @@ echo   /format ^<fmt^>   - Format: Hierarchical or Plain (default: Hierarchical)
 echo   /v8 ^<path^>      - Path to 1cv8.exe
 echo   /out ^<file^>     - Output file for service messages
 echo   /debug          - Debug mode
+echo   /updatedb       - Update database configuration after loading
+echo   /run            - Run 1C:Enterprise after loading
+echo   /navlink ^<url^>  - Navigation link to open in 1C:Enterprise
+echo   /runep ^<path^>   - Path to external data processor to run
 echo.
 echo Examples:
 echo   %~nx0 a3f5b21 /ib "C:\Bases\MyBase" /n Admin
 echo   %~nx0 HEAD~1 /ibname "MyBase" /configdir ".\src"
+echo   %~nx0 HEAD /ib "C:\Bases\MyBase" /updatedb
+echo   %~nx0 HEAD /ib "C:\Bases\MyBase" /run /navlink "e1cib/data/Catalog.Items"
 echo.
 exit /b 1
