@@ -98,29 +98,28 @@ if "!COMMIT_ID!"=="" (
     shift
     goto parse_args
 )
-echo Неизвестный параметр: %~1
+echo Unknown parameter: %~1
 goto usage
 
 :check_params
 if "!COMMIT_ID!"=="" (
-    echo Ошибка: Не указан идентификатор коммита
+    echo Error: Commit ID not specified
     goto usage
 )
 
 if "!IB_PATH!"=="" if "!IB_NAME!"=="" (
-    echo Ошибка: Необходимо указать /ib или /ibname
+    echo Error: InfoBasePath or InfoBaseName required
     goto usage
 )
 
 if not exist "!CONFIG_DIR!" (
-    echo Ошибка: Каталог конфигурации не найден: !CONFIG_DIR!
+    echo Error: Config directory not found: !CONFIG_DIR!
     exit /b 1
 )
 
-REM Проверка наличия git
 where git >nul 2>&1
 if errorlevel 1 (
-    echo Ошибка: git не найден в PATH
+    echo Error: git not found in PATH
     exit /b 1
 )
 
@@ -136,51 +135,96 @@ if "!DEBUG_MODE!"=="1" (
 )
 
 REM Получение списка измененных файлов из коммита
-echo Получение списка измененных файлов из коммита !COMMIT_ID!...
+echo Getting changed files from commit !COMMIT_ID!...
 git show --pretty="" --name-only !COMMIT_ID! > "!TEMP_DIR!\changed_files.txt" 2>&1
 if errorlevel 1 (
-    echo Ошибка при получении списка файлов из git
+    echo Error getting files from git
     type "!TEMP_DIR!\changed_files.txt"
     goto cleanup
 )
 
 REM Фильтрация файлов конфигурации и создание списка для загрузки
-echo Подготовка списка файлов для загрузки...
+echo Preparing file list for loading...
 set "FILE_COUNT=0"
-(
-    for /f "usebackq delims=" %%f in ("!TEMP_DIR!\changed_files.txt") do (
-        set "FILE_PATH=%%f"
+set "TEMP_LIST=!TEMP_DIR!\temp_list.txt"
+if exist "!TEMP_LIST!" del "!TEMP_LIST!"
+
+for /f "usebackq delims=" %%f in ("!TEMP_DIR!\changed_files.txt") do (
+    set "FILE_PATH=%%f"
+    
+    REM Проверяем, что файл относится к каталогу конфигурации
+    echo !FILE_PATH! | findstr /b "!CONFIG_DIR!" >nul
+    if !errorlevel! equ 0 (
+        REM Убираем префикс каталога конфигурации
+        set "REL_PATH=!FILE_PATH:*%CONFIG_DIR%\=!"
         
-        REM Проверяем, что файл относится к каталогу конфигурации
-        echo !FILE_PATH! | findstr /b "!CONFIG_DIR!" >nul
+        REM Проверяем расширение файла
+        echo !FILE_PATH! | findstr /i "\.xml$" >nul
         if !errorlevel! equ 0 (
-            REM Проверяем расширение файла (xml для конфигурации)
-            echo !FILE_PATH! | findstr /i "\.xml$" >nul
+            REM XML файл - добавляем напрямую
+            if exist "!CONFIG_DIR!\!REL_PATH!" (
+                echo !REL_PATH!>> "!TEMP_LIST!"
+                set /a FILE_COUNT+=1
+                if "!DEBUG_MODE!"=="1" echo [DEBUG] Added XML: !REL_PATH!
+            )
+        ) else (
+            REM Проверяем BSL файлы
+            echo !FILE_PATH! | findstr /i "\.bsl$" >nul
             if !errorlevel! equ 0 (
-                REM Убираем префикс каталога конфигурации
-                set "REL_PATH=!FILE_PATH:*%CONFIG_DIR%\=!"
+                if "!DEBUG_MODE!"=="1" echo [DEBUG] Found BSL file: !REL_PATH!
                 
-                REM Проверяем существование файла
-                if exist "!CONFIG_DIR!\!REL_PATH!" (
-                    echo !REL_PATH!
-                    set /a FILE_COUNT+=1
+                REM Извлекаем тип и имя объекта из пути
+                REM Пример: Catalogs\Справочник1\Ext\ObjectModule.bsl
+                for /f "tokens=1,2 delims=\" %%a in ("!REL_PATH!") do (
+                    set "OBJ_TYPE=%%a"
+                    set "OBJ_NAME=%%b"
                     
-                    if "!DEBUG_MODE!"=="1" echo [DEBUG] Добавлен: !REL_PATH!
+                    REM Формируем путь к XML объекта
+                    set "OBJ_XML=%%a\%%b.xml"
+                    
+                    if exist "!CONFIG_DIR!\!OBJ_XML!" (
+                        REM Добавляем XML объекта
+                        echo !OBJ_XML!>> "!TEMP_LIST!"
+                        set /a FILE_COUNT+=1
+                        if "!DEBUG_MODE!"=="1" echo [DEBUG] Added object XML for BSL: !OBJ_XML!
+                        
+                        REM Добавляем BSL файл
+                        echo !REL_PATH!>> "!TEMP_LIST!"
+                        set /a FILE_COUNT+=1
+                        if "!DEBUG_MODE!"=="1" echo [DEBUG] Added BSL: !REL_PATH!
+                        
+                        REM Добавляем все файлы из подкаталога Ext
+                        if exist "!CONFIG_DIR!\%%a\%%b\Ext\" (
+                            for /r "!CONFIG_DIR!\%%a\%%b\Ext" %%e in (*) do (
+                                set "EXT_FILE=%%e"
+                                set "EXT_REL=!EXT_FILE:*%CONFIG_DIR%\=!"
+                                echo !EXT_REL!>> "!TEMP_LIST!"
+                                set /a FILE_COUNT+=1
+                                if "!DEBUG_MODE!"=="1" echo [DEBUG] Added additional file: !EXT_REL!
+                            )
+                        )
+                    )
                 )
             )
         )
     )
-) > "!LIST_FILE!"
+)
+
+REM Убираем дубликаты и создаем финальный список
+if exist "!TEMP_LIST!" (
+    sort "!TEMP_LIST!" | findstr /v "^$" > "!LIST_FILE!"
+    del "!TEMP_LIST!"
+)
 
 if "!FILE_COUNT!"=="0" (
-    echo Не найдено ни одного файла конфигурации для загрузки в коммите !COMMIT_ID!
+    echo No configuration files found for loading in commit !COMMIT_ID!
     goto cleanup
 )
 
-echo Найдено файлов для загрузки: !FILE_COUNT!
+echo Files found for loading: !FILE_COUNT!
 
 if "!DEBUG_MODE!"=="1" (
-    echo [DEBUG] Содержимое файла списка:
+    echo [DEBUG] List file content:
     type "!LIST_FILE!"
 )
 
@@ -217,9 +261,9 @@ REM Отключение диалогов
 set "CMD_LINE=!CMD_LINE! /DisableStartupDialogs"
 
 echo.
-echo Выполнение загрузки конфигурации...
+echo Executing configuration load...
 if "!DEBUG_MODE!"=="1" (
-    echo [DEBUG] Команда: !CMD_LINE!
+    echo [DEBUG] Command: !CMD_LINE!
 )
 
 REM Выполнение команды
@@ -228,17 +272,16 @@ set "EXIT_CODE=!errorlevel!"
 
 echo.
 if "!EXIT_CODE!"=="0" (
-    echo Загрузка завершена успешно
+    echo Load completed successfully
 ) else (
-    echo Ошибка при загрузке конфигурации ^(код: !EXIT_CODE!^)
+    echo Error loading configuration ^(code: !EXIT_CODE!^)
 )
 
-REM Вывод лога
 if exist "!OUT_FILE!" (
     echo.
-    echo --- Лог выполнения ---
+    echo --- Execution log ---
     type "!OUT_FILE!"
-    echo --- Конец лога ---
+    echo --- End of log ---
 )
 
 :cleanup
@@ -246,29 +289,29 @@ REM Очистка временных файлов
 if "!DEBUG_MODE!"=="0" (
     if exist "!TEMP_DIR!" rd /s /q "!TEMP_DIR!"
 ) else (
-    echo [DEBUG] Временные файлы сохранены в: !TEMP_DIR!
+    echo [DEBUG] Temporary files saved in: !TEMP_DIR!
 )
 
 exit /b !EXIT_CODE!
 
 :usage
 echo.
-echo Использование:
+echo Usage:
 echo   %~nx0 ^<commit-id^> [options]
 echo.
-echo Параметры:
-echo   ^<commit-id^>     - Идентификатор коммита git
-echo   /ib ^<path^>      - Путь к информационной базе или строка подключения
-echo   /ibname ^<name^>  - Имя информационной базы из списка
-echo   /n ^<user^>       - Имя пользователя
-echo   /p ^<password^>   - Пароль пользователя
-echo   /configdir ^<dir^>- Каталог с выгруженной конфигурацией (по умолчанию: ./config)
-echo   /format ^<fmt^>   - Формат: Hierarchical или Plain (по умолчанию: Hierarchical)
-echo   /v8 ^<path^>      - Путь к 1cv8.exe
-echo   /out ^<file^>     - Файл для вывода служебных сообщений
-echo   /debug          - Режим отладки
+echo Parameters:
+echo   ^<commit-id^>     - Git commit identifier
+echo   /ib ^<path^>      - Path to infobase or connection string
+echo   /ibname ^<name^>  - Infobase name from list
+echo   /n ^<user^>       - Username
+echo   /p ^<password^>   - Password
+echo   /configdir ^<dir^>- Configuration directory (default: ./config)
+echo   /format ^<fmt^>   - Format: Hierarchical or Plain (default: Hierarchical)
+echo   /v8 ^<path^>      - Path to 1cv8.exe
+echo   /out ^<file^>     - Output file for service messages
+echo   /debug          - Debug mode
 echo.
-echo Примеры:
+echo Examples:
 echo   %~nx0 a3f5b21 /ib "C:\Bases\MyBase" /n Admin
 echo   %~nx0 HEAD~1 /ibname "MyBase" /configdir ".\src"
 echo.

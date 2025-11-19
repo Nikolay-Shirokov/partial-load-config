@@ -8,34 +8,34 @@
     LoadConfigFromFiles с параметром -partial
 
 .PARAMETER CommitId
-    Идентификатор коммита git (обязательный)
+    Git commit identifier (required)
 
 .PARAMETER InfoBasePath
-    Путь к файловой информационной базе
+    Path to file infobase
 
 .PARAMETER InfoBaseName
-    Имя информационной базы из списка
+    Infobase name from list
 
 .PARAMETER UserName
-    Имя пользователя 1С
+    1C username
 
 .PARAMETER Password
-    Пароль пользователя 1С
+    User password
 
 .PARAMETER ConfigDir
-    Каталог с выгруженной конфигурацией (по умолчанию: config)
+    Configuration directory (default: config)
 
 .PARAMETER Format
-    Формат конфигурации: Hierarchical или Plain (по умолчанию: Hierarchical)
+    Format: Hierarchical or Plain (default: Hierarchical)
 
 .PARAMETER V8Path
-    Путь к 1cv8.exe (если не указан, ищется в PATH)
+    Path to 1cv8.exe (if not specified, searched in PATH)
 
 .PARAMETER OutFile
-    Файл для вывода служебных сообщений
+    Output file for service messages
 
-.PARAMETER Debug
-    Режим отладки с дополнительным выводом
+.PARAMETER DebugMode
+    Debug mode with additional output
 
 .EXAMPLE
     .\partial-load-config.ps1 -CommitId "a3f5b21" -InfoBasePath "C:\Bases\MyBase" -UserName "Admin"
@@ -78,7 +78,7 @@ param(
     [string]$OutFile,
     
     [Parameter(Mandatory=$false)]
-    [switch]$Debug
+    [switch]$DebugMode
 )
 
 # Установка кодировки консоли
@@ -87,59 +87,69 @@ param(
 # Функция для вывода отладочной информации
 function Write-DebugInfo {
     param([string]$Message)
-    if ($Debug) {
+    if ($DebugMode) {
         Write-Host "[DEBUG] $Message" -ForegroundColor Cyan
     }
 }
 
-# Функция для вывода ошибок
 function Write-ErrorInfo {
     param([string]$Message)
-    Write-Host "Ошибка: $Message" -ForegroundColor Red
+    Write-Host "Error: $Message" -ForegroundColor Red
 }
 
-# Проверка параметров
+function Get-ObjectXmlFromBsl {
+    param([string]$BslPath, [string]$ConfigDir)
+    
+    $relativePath = $BslPath -replace "^$ConfigDir[\\/]", ""
+    $parts = $relativePath -split '[\\/]'
+    
+    if ($parts.Count -ge 2) {
+        $objectType = $parts[0]
+        $objectName = $parts[1]
+        $xmlPath = "$objectType/$objectName.xml"
+        return $xmlPath
+    }
+    
+    return $null
+}
+
 if (-not $InfoBasePath -and -not $InfoBaseName) {
-    Write-ErrorInfo "Необходимо указать -InfoBasePath или -InfoBaseName"
+    Write-ErrorInfo "InfoBasePath or InfoBaseName required"
     exit 1
 }
 
 if (-not (Test-Path $ConfigDir)) {
-    Write-ErrorInfo "Каталог конфигурации не найден: $ConfigDir"
+    Write-ErrorInfo "Config directory not found: $ConfigDir"
     exit 1
 }
 
-# Проверка наличия git
 try {
     $null = git --version
-    Write-DebugInfo "Git найден"
+    Write-DebugInfo "Git found"
 } catch {
-    Write-ErrorInfo "git не найден в PATH"
+    Write-ErrorInfo "git not found in PATH"
     exit 1
 }
 
 # Создание временного каталога
 $tempDir = Join-Path $env:TEMP "1c_partial_load_$(Get-Random)"
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-Write-DebugInfo "Временный каталог: $tempDir"
+Write-DebugInfo "Temp directory: $tempDir"
 
 $listFile = Join-Path $tempDir "load_list.txt"
 
 try {
-    # Получение списка измененных файлов из коммита
-    Write-Host "Получение списка измененных файлов из коммита $CommitId..." -ForegroundColor Green
+    Write-Host "Getting changed files from commit $CommitId..." -ForegroundColor Green
     
     $changedFiles = git show --pretty="" --name-only $CommitId 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-ErrorInfo "Ошибка при получении списка файлов из git"
+        Write-ErrorInfo "Error getting files from git"
         Write-Host $changedFiles
         exit 1
     }
     
-    Write-DebugInfo "Всего измененных файлов: $($changedFiles.Count)"
-    
-    # Фильтрация и подготовка списка файлов для загрузки
-    Write-Host "Подготовка списка файлов для загрузки..." -ForegroundColor Green
+    Write-DebugInfo "Total changed files: $($changedFiles.Count)"
+    Write-Host "Preparing file list for loading..." -ForegroundColor Green
     
     $configFiles = @()
     $configDirNormalized = $ConfigDir.TrimEnd('\', '/')
@@ -148,37 +158,65 @@ try {
         $file = $file.Trim()
         if ([string]::IsNullOrWhiteSpace($file)) { continue }
         
-        # Проверяем, что файл из каталога конфигурации
         if ($file -like "$configDirNormalized/*" -or $file -like "$configDirNormalized\*") {
-            # Проверяем расширение (xml для конфигурации)
+            $relativePath = $file -replace "^$configDirNormalized[\\/]", ""
+            
             if ($file -match '\.xml$') {
-                # Получаем относительный путь
-                $relativePath = $file -replace "^$configDirNormalized[\\/]", ""
-                
-                # Проверяем существование файла
                 $fullPath = Join-Path $ConfigDir $relativePath
                 if (Test-Path $fullPath) {
-                    $configFiles += $relativePath
-                    Write-DebugInfo "Добавлен: $relativePath"
-                } else {
-                    Write-DebugInfo "Файл не найден (возможно удален): $relativePath"
+                    if ($configFiles -notcontains $relativePath) {
+                        $configFiles += $relativePath
+                        Write-DebugInfo "Added XML: $relativePath"
+                    }
+                }
+            }
+            elseif ($file -match '\.bsl$') {
+                Write-DebugInfo "Found BSL file: $relativePath"
+                
+                $objectXml = Get-ObjectXmlFromBsl -BslPath $file -ConfigDir $configDirNormalized
+                if ($objectXml) {
+                    $fullXmlPath = Join-Path $ConfigDir $objectXml
+                    if (Test-Path $fullXmlPath) {
+                        if ($configFiles -notcontains $objectXml) {
+                            $configFiles += $objectXml
+                            Write-DebugInfo "Added object XML for BSL: $objectXml"
+                        }
+                        
+                        if ($configFiles -notcontains $relativePath) {
+                            $configFiles += $relativePath
+                            Write-DebugInfo "Added BSL: $relativePath"
+                        }
+                        
+                        $objectDir = Split-Path $fullXmlPath -Parent
+                        if (Test-Path $objectDir) {
+                            $extDir = Join-Path $objectDir "Ext"
+                            if (Test-Path $extDir) {
+                                Get-ChildItem -Path $extDir -Recurse -File | ForEach-Object {
+                                    $extRelPath = $_.FullName.Replace($ConfigDir + '\', '').Replace('\', '/')
+                                    if ($configFiles -notcontains $extRelPath) {
+                                        $configFiles += $extRelPath
+                                        Write-DebugInfo "Added additional file: $extRelPath"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
     
     if ($configFiles.Count -eq 0) {
-        Write-Host "Не найдено ни одного файла конфигурации для загрузки в коммите $CommitId" -ForegroundColor Yellow
+        Write-Host "No configuration files found for loading in commit $CommitId" -ForegroundColor Yellow
         exit 0
     }
     
-    Write-Host "Найдено файлов для загрузки: $($configFiles.Count)" -ForegroundColor Green
+    Write-Host "Files found for loading: $($configFiles.Count)" -ForegroundColor Green
     
-    # Сохранение списка в файл
     $configFiles | Out-File -FilePath $listFile -Encoding UTF8
     
-    if ($Debug) {
-        Write-DebugInfo "Содержимое файла списка:"
+    if ($DebugMode) {
+        Write-DebugInfo "List file content:"
         Get-Content $listFile | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     }
     
@@ -214,9 +252,9 @@ try {
     
     # Выполнение команды
     Write-Host ""
-    Write-Host "Выполнение загрузки конфигурации..." -ForegroundColor Green
+    Write-Host "Executing configuration load..." -ForegroundColor Green
     
-    if ($Debug) {
+    if ($DebugMode) {
         $cmdLine = "$V8Path $($arguments -join ' ')"
         Write-DebugInfo "Команда: $cmdLine"
     }
@@ -231,29 +269,27 @@ try {
     
     Write-Host ""
     if ($exitCode -eq 0) {
-        Write-Host "Загрузка завершена успешно" -ForegroundColor Green
+        Write-Host "Load completed successfully" -ForegroundColor Green
     } else {
-        Write-Host "Ошибка при загрузке конфигурации (код: $exitCode)" -ForegroundColor Red
+        Write-Host "Error loading configuration (code: $exitCode)" -ForegroundColor Red
     }
     
-    # Вывод лога
     if (Test-Path $OutFile) {
         Write-Host ""
-        Write-Host "--- Лог выполнения ---" -ForegroundColor Yellow
+        Write-Host "--- Execution log ---" -ForegroundColor Yellow
         Get-Content $OutFile | Write-Host
-        Write-Host "--- Конец лога ---" -ForegroundColor Yellow
+        Write-Host "--- End of log ---" -ForegroundColor Yellow
     }
     
     exit $exitCode
     
 } finally {
-    # Очистка временных файлов
-    if (-not $Debug) {
+    if (-not $DebugMode) {
         if (Test-Path $tempDir) {
             Remove-Item -Path $tempDir -Recurse -Force
-            Write-DebugInfo "Временные файлы удалены"
+            Write-DebugInfo "Temporary files deleted"
         }
     } else {
-        Write-DebugInfo "Временные файлы сохранены в: $tempDir"
+        Write-DebugInfo "Temporary files saved in: $tempDir"
     }
 }
