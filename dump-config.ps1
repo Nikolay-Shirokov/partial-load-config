@@ -79,7 +79,8 @@ param(
     [string]$Mode = "Changes",
     
     [Parameter(Mandatory=$false)]
-    [string]$OutputDir = "config_dump",
+    [Alias("ConfigDir")]
+    [string]$OutputDir,
     
     [Parameter(Mandatory=$false)]
     [string]$InfoBasePath,
@@ -168,7 +169,13 @@ if (-not $PSBoundParameters.ContainsKey('V8Path')) {
 
 if (-not $PSBoundParameters.ContainsKey('OutputDir')) {
     $envOutputDir = [Environment]::GetEnvironmentVariable('DUMP_OUTPUT_DIR', 'Process')
-    if ($envOutputDir) { $OutputDir = $envOutputDir }
+    if ($envOutputDir) {
+        $OutputDir = $envOutputDir
+    } else {
+        # Если DUMP_OUTPUT_DIR не задан, пробуем использовать CONFIG_DIR для единообразия
+        $envConfigDir = [Environment]::GetEnvironmentVariable('CONFIG_DIR', 'Process')
+        if ($envConfigDir) { $OutputDir = $envConfigDir }
+    }
 }
 
 if (-not $PSBoundParameters.ContainsKey('Format')) {

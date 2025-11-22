@@ -6,8 +6,8 @@
     Обертка над dump-config.ps1 для инкрементальной выгрузки только измененных объектов.
     Выполняет команду /DumpConfigToFiles с параметром -update.
 
-.PARAMETER OutputDir
-    Каталог для выгрузки конфигурации (default: config_dump)
+.PARAMETER ConfigDir
+    Каталог для выгрузки конфигурации. Переопределяет CONFIG_DIR из .env.
 
 .PARAMETER InfoBasePath
     Путь к файловой информационной базе
@@ -66,7 +66,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$false)]
-    [string]$OutputDir,
+    [string]$ConfigDir,
     
     [Parameter(Mandatory=$false)]
     [string]$InfoBasePath,
@@ -115,7 +115,7 @@ $dumpConfigParams = @{
 }
 
 # Передаем все остальные параметры, если они указаны
-if ($OutputDir) { $dumpConfigParams['OutputDir'] = $OutputDir }
+if ($ConfigDir) { $dumpConfigParams['OutputDir'] = $ConfigDir }
 if ($InfoBasePath) { $dumpConfigParams['InfoBasePath'] = $InfoBasePath }
 if ($InfoBaseName) { $dumpConfigParams['InfoBaseName'] = $InfoBaseName }
 if ($UserName) { $dumpConfigParams['UserName'] = $UserName }

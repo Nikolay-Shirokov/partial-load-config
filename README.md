@@ -566,10 +566,10 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 
 ```powershell
 # Используя обертку
-.\dump-full-config.ps1 -OutputDir "src" -InfoBasePath "C:\Bases\MyBase"
+.\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
 
 # Используя универсальный скрипт
-.\dump-config.ps1 -Mode Full -OutputDir "src" -InfoBasePath "C:\Bases\MyBase"
+.\dump-config.ps1 -Mode Full -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
 ```
 
 **Использование:**
@@ -583,15 +583,15 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 
 ```powershell
 # Используя обертку
-.\dump-changes-config.ps1 -OutputDir "src" -InfoBasePath "C:\Bases\MyBase"
+.\dump-changes-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
 
 # С сохранением списка изменений
-.\dump-changes-config.ps1 -OutputDir "src" `
+.\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase" `
     -ChangesFile "changes.txt"
 
 # Сравнение с другой выгрузкой
-.\dump-changes-config.ps1 -OutputDir "src" `
+.\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase" `
     -CompareWith "old_dump\ConfigDumpInfo.xml" `
     -Force
@@ -611,7 +611,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 ```powershell
 # Используя обертку
 .\dump-partial-config.ps1 -ObjectsListFile "objects.txt" `
-    -OutputDir "src" `
+    -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase"
 
 # С отладкой
@@ -641,7 +641,7 @@ Configuration.Справочник1.Splash
 | Параметр | Обязательный | Описание |
 |----------|--------------|----------|
 | `Mode` | Нет | Режим выгрузки: Full, Changes, Partial (default: Changes) |
-| `OutputDir` | Нет | Каталог для выгрузки (default: config_dump) |
+| `ConfigDir` | Нет | Каталог для выгрузки. Переопределяет `CONFIG_DIR` из `.env`. (default: `config`) |
 | `InfoBasePath` | Да* | Путь к файловой базе данных |
 | `InfoBaseName` | Да* | Имя базы из списка (альтернатива InfoBasePath) |
 
@@ -680,7 +680,6 @@ Configuration.Справочник1.Splash
 
 ```ini
 # Выгрузка конфигурации
-DUMP_OUTPUT_DIR=src
 DUMP_MODE=Changes
 DUMP_OBJECTS_LIST=dump_objects.txt
 DUMP_CHANGES_FILE=config_changes.txt
@@ -702,12 +701,12 @@ DUMP_CHANGES_FILE=config_changes.txt
 
 ```powershell
 # Первая выгрузка (полная)
-.\dump-full-config.ps1 -OutputDir "src" -InfoBasePath "C:\Bases\Dev"
+.\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Dev"
 
 # Работа в 1С...
 
 # Последующие выгрузки (только изменения)
-.\dump-changes-config.ps1 -OutputDir "src" `
+.\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\Dev" `
     -ChangesFile "changes.txt"
 
@@ -720,7 +719,7 @@ git commit -m "Добавлен новый справочник"
 
 ```powershell
 # Выгружаем только измененные объекты
-.\dump-changes-config.ps1 -OutputDir "export_for_ai" `
+.\dump-changes-config.ps1 -ConfigDir "export_for_ai" `
     -InfoBasePath "C:\Bases\MyBase" `
     -ChangesFile "what_changed.txt" `
     -DebugMode
@@ -743,7 +742,7 @@ Reports/АнализПродаж.xml
 
 # Выгружаем только эти объекты
 .\dump-partial-config.ps1 -ObjectsListFile "objects.txt" `
-    -OutputDir "selected_objects" `
+    -ConfigDir "selected_objects" `
     -InfoBasePath "C:\Bases\MyBase"
 ```
 
@@ -751,12 +750,12 @@ Reports/АнализПродаж.xml
 
 ```powershell
 # Выгрузка конкретного расширения
-.\dump-full-config.ps1 -OutputDir "extensions\MyExtension" `
+.\dump-full-config.ps1 -ConfigDir "extensions\MyExtension" `
     -InfoBasePath "C:\Bases\MyBase" `
     -Extension "MyExtension"
 
 # Выгрузка всех расширений
-.\dump-full-config.ps1 -OutputDir "all_extensions" `
+.\dump-full-config.ps1 -ConfigDir "all_extensions" `
     -InfoBasePath "C:\Bases\MyBase" `
     -AllExtensions
 ```
@@ -767,7 +766,7 @@ Reports/АнализПродаж.xml
 
 ```powershell
 # 1. Выгружаем конфигурацию из базы в файлы
-.\dump-changes-config.ps1 -OutputDir "src" -InfoBasePath "C:\Bases\Prod"
+.\dump-changes-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Prod"
 
 # 2. Фиксируем в git
 git add src
@@ -785,7 +784,7 @@ git commit -m "Обновление конфигурации"
 При возникновении проблем используйте параметр `-DebugMode`:
 
 ```powershell
-.\dump-changes-config.ps1 -OutputDir "src" `
+.\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase" `
     -DebugMode
 ```
