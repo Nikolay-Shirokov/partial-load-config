@@ -75,7 +75,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$false)]
-    [ValidateSet("Full", "Changes", "Partial")]
+    [ValidateSet("Full", "Changes", "Partial", "UpdateInfo")]
     [string]$Mode = "Changes",
     
     [Parameter(Mandatory=$false)]
@@ -187,7 +187,7 @@ if (-not $PSBoundParameters.ContainsKey('Format')) {
 
 if (-not $PSBoundParameters.ContainsKey('Mode')) {
     $envMode = [Environment]::GetEnvironmentVariable('DUMP_MODE', 'Process')
-    if ($envMode -and ($envMode -eq 'Full' -or $envMode -eq 'Changes' -or $envMode -eq 'Partial')) {
+    if ($envMode -and ($envMode -eq 'Full' -or $envMode -eq 'Changes' -or $envMode -eq 'Partial' -or $envMode -eq 'UpdateInfo')) {
         $Mode = $envMode
     }
 }
@@ -386,8 +386,11 @@ try {
                 Get-Content $tempListFile -Encoding UTF8 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
             }
         }
+        "UpdateInfo" {
+            Write-Host "Updating ConfigDumpInfo.xml..." -ForegroundColor Green
+            $arguments += "-configDumpInfoOnly"
+        }
     }
-    
     # Расширения
     if ($Extension) {
         $arguments += "-Extension", "`"$Extension`""
