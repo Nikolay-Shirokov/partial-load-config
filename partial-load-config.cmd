@@ -45,6 +45,32 @@ set "EXTERNAL_DATA_PROCESSOR="
 set "TEMP_DIR=%TEMP%\1c_partial_load_%RANDOM%"
 set "LIST_FILE=%TEMP_DIR%\load_list.txt"
 
+REM Загрузка переменных из .env файла, если он существует
+if exist ".env" (
+    if "!DEBUG_MODE!"=="1" echo [DEBUG] Loading environment variables from .env file
+    for /f "usebackq eol=# delims=" %%a in (".env") do (
+        for /f "tokens=1,* delims==" %%b in ("%%a") do (
+            set "key=%%b"
+            set "value=%%c"
+            
+            REM Убираем кавычки из значения
+            if defined value (
+                if "!value:~0,1!"=="""" set "value=!value:~1,-1!"
+            )
+
+            if /i "!key!"=="V8_PATH" if "!V8_PATH!"=="1cv8.exe" set "V8_PATH=!value!"
+            if /i "!key!"=="CONFIG_DIR" if "!CONFIG_DIR!"=="config" set "CONFIG_DIR=!value!"
+            if /i "!key!"=="CONFIG_FORMAT" if "!CONFIG_FORMAT!"=="Hierarchical" set "CONFIG_FORMAT=!value!"
+            if /i "!key!"=="INFOBASE_PATH" if "!IB_PATH!"=="" set "IB_PATH=!value!"
+            if /i "!key!"=="INFOBASE_NAME" if "!IB_NAME!"=="" set "IB_NAME=!value!"
+            if /i "!key!"=="USERNAME_1C" if "!USER_NAME!"=="" set "USER_NAME=!value!"
+            if /i "!key!"=="DEBUG_MODE" if "!DEBUG_MODE!"=="0" if /i "!value!"=="true" set "DEBUG_MODE=1"
+            if /i "!key!"=="UPDATE_DB" if "!UPDATE_DB!"=="0" if /i "!value!"=="true" set "UPDATE_DB=1"
+            if /i "!key!"=="RUN_ENTERPRISE" if "!RUN_ENTERPRISE!"=="0" if /i "!value!"=="true" set "RUN_ENTERPRISE=1"
+        )
+    )
+)
+
 REM Разбор параметров командной строки
 :parse_args
 if "%~1"=="" goto check_params
@@ -132,11 +158,6 @@ echo Unknown parameter: %~1
 goto usage
 
 :check_params
-if "!COMMIT_ID!"=="" (
-    echo Error: Commit ID not specified
-    goto usage
-)
-
 if "!IB_PATH!"=="" if "!IB_NAME!"=="" (
     echo Error: InfoBasePath or InfoBaseName required
     goto usage
@@ -164,21 +185,29 @@ if "!DEBUG_MODE!"=="1" (
     echo [DEBUG] List file: !LIST_FILE!
 )
 
-REM Получение списка измененных файлов от коммита до текущего состояния
-echo Getting changed files from commit !COMMIT_ID! to current state...
-
-REM Получаем изменения от коммита до HEAD
-if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting changes from !COMMIT_ID! to HEAD...
-git diff --name-only "!COMMIT_ID!..HEAD" > "!TEMP_DIR!\commit_to_head.txt" 2>&1
-if errorlevel 1 (
-    echo Error getting changes from commit to HEAD
-    type "!TEMP_DIR!\commit_to_head.txt"
-    goto cleanup
+REM Получение списка измененных файлов
+if "!COMMIT_ID!"=="" (
+    echo Checking for uncommitted changes...
+    
+    REM Получаем staged изменения
+    if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting staged changes...
+    git diff --cached --name-only > "!TEMP_DIR!\staged.txt" 2>&1
+) else (
+    echo Getting changed files from commit !COMMIT_ID! to current state...
+    
+    REM Получаем изменения от коммита до HEAD
+    if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting changes from !COMMIT_ID! to HEAD...
+    git diff --name-only "!COMMIT_ID!..HEAD" > "!TEMP_DIR!\commit_to_head.txt" 2>&1
+    if errorlevel 1 (
+        echo Error getting changes from commit to HEAD
+        type "!TEMP_DIR!\commit_to_head.txt"
+        goto cleanup
+    )
+    
+    REM Получаем staged изменения
+    if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting staged changes...
+    git diff --cached --name-only > "!TEMP_DIR!\staged.txt" 2>&1
 )
-
-REM Получаем staged изменения
-if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting staged changes...
-git diff --cached --name-only > "!TEMP_DIR!\staged.txt" 2>&1
 if errorlevel 1 (
     echo Error getting staged changes
     type "!TEMP_DIR!\staged.txt"
@@ -204,18 +233,28 @@ if errorlevel 1 (
 )
 
 REM Объединяем все файлы
-type "!TEMP_DIR!\commit_to_head.txt" "!TEMP_DIR!\staged.txt" "!TEMP_DIR!\unstaged.txt" "!TEMP_DIR!\untracked.txt" > "!TEMP_DIR!\all_changes.txt" 2>nul
+if "!COMMIT_ID!"=="" (
+    copy /b "!TEMP_DIR!\staged.txt"+"!TEMP_DIR!\unstaged.txt"+"!TEMP_DIR!\untracked.txt" "!TEMP_DIR!\all_changes.txt" >nul 2>&1
+) else (
+    copy /b "!TEMP_DIR!\commit_to_head.txt"+"!TEMP_DIR!\staged.txt"+"!TEMP_DIR!\unstaged.txt"+"!TEMP_DIR!\untracked.txt" "!TEMP_DIR!\all_changes.txt" >nul 2>&1
+)
 
 REM Подсчет статистики для отладки
 if "!DEBUG_MODE!"=="1" (
-    for /f %%i in ('type "!TEMP_DIR!\commit_to_head.txt" ^| find /c /v ""') do echo [DEBUG] Changes from !COMMIT_ID! to HEAD: %%i files
-    for /f %%i in ('type "!TEMP_DIR!\staged.txt" ^| find /c /v ""') do echo [DEBUG] Staged changes: %%i files
-    for /f %%i in ('type "!TEMP_DIR!\unstaged.txt" ^| find /c /v ""') do echo [DEBUG] Unstaged changes: %%i files
-    for /f %%i in ('type "!TEMP_DIR!\untracked.txt" ^| find /c /v ""') do echo [DEBUG] Untracked files: %%i files
+    if not "!COMMIT_ID!"=="" (
+        for /f %%i in ('type "!TEMP_DIR!\commit_to_head.txt" 2^>nul ^| find /c /v ""') do echo [DEBUG] Changes from !COMMIT_ID! to HEAD: %%i files
+    )
+    for /f %%i in ('type "!TEMP_DIR!\staged.txt" 2^>nul ^| find /c /v ""') do echo [DEBUG] Staged changes: %%i files
+    for /f %%i in ('type "!TEMP_DIR!\unstaged.txt" 2^>nul ^| find /c /v ""') do echo [DEBUG] Unstaged changes: %%i files
+    for /f %%i in ('type "!TEMP_DIR!\untracked.txt" 2^>nul ^| find /c /v ""') do echo [DEBUG] Untracked files: %%i files
 )
 
-REM Убираем дубликаты и пустые строки
-(for /f "usebackq delims=" %%f in ("!TEMP_DIR!\all_changes.txt") do echo %%f) | sort | uniq > "!TEMP_DIR!\changed_files.txt"
+REM Убираем дубликаты и пустые строки (используем sort)
+if exist "!TEMP_DIR!\all_changes.txt" (
+    type "!TEMP_DIR!\all_changes.txt" | sort /unique > "!TEMP_DIR!\changed_files.txt"
+) else (
+    type nul > "!TEMP_DIR!\changed_files.txt"
+)
 
 if "!DEBUG_MODE!"=="1" (
     for /f %%i in ('type "!TEMP_DIR!\changed_files.txt" ^| find /c /v ""') do echo [DEBUG] Total unique files: %%i
@@ -227,70 +266,20 @@ set "FILE_COUNT=0"
 set "TEMP_LIST=!TEMP_DIR!\temp_list.txt"
 if exist "!TEMP_LIST!" del "!TEMP_LIST!"
 
-for /f "usebackq delims=" %%f in ("!TEMP_DIR!\changed_files.txt") do (
-    set "FILE_PATH=%%f"
-    
-    REM Проверяем, что файл относится к каталогу конфигурации
-    echo !FILE_PATH! | findstr /b "!CONFIG_DIR!" >nul
-    if !errorlevel! equ 0 (
-        REM Убираем префикс каталога конфигурации
-        set "REL_PATH=!FILE_PATH:*%CONFIG_DIR%\=!"
-        
-        REM Проверяем расширение файла
-        echo !FILE_PATH! | findstr /i "\.xml$" >nul
-        if !errorlevel! equ 0 (
-            REM XML файл - добавляем напрямую
-            if exist "!CONFIG_DIR!\!REL_PATH!" (
-                echo !REL_PATH!>> "!TEMP_LIST!"
-                set /a FILE_COUNT+=1
-                if "!DEBUG_MODE!"=="1" echo [DEBUG] Added XML: !REL_PATH!
-            )
-        ) else (
-            REM Проверяем BSL файлы
-            echo !FILE_PATH! | findstr /i "\.bsl$" >nul
-            if !errorlevel! equ 0 (
-                if "!DEBUG_MODE!"=="1" echo [DEBUG] Found BSL file: !REL_PATH!
-                
-                REM Извлекаем тип и имя объекта из пути
-                REM Пример: Catalogs\Справочник1\Ext\ObjectModule.bsl
-                for /f "tokens=1,2 delims=\" %%a in ("!REL_PATH!") do (
-                    set "OBJ_TYPE=%%a"
-                    set "OBJ_NAME=%%b"
-                    
-                    REM Формируем путь к XML объекта
-                    set "OBJ_XML=%%a\%%b.xml"
-                    
-                    if exist "!CONFIG_DIR!\!OBJ_XML!" (
-                        REM Добавляем XML объекта
-                        echo !OBJ_XML!>> "!TEMP_LIST!"
-                        set /a FILE_COUNT+=1
-                        if "!DEBUG_MODE!"=="1" echo [DEBUG] Added object XML for BSL: !OBJ_XML!
-                        
-                        REM Добавляем BSL файл
-                        echo !REL_PATH!>> "!TEMP_LIST!"
-                        set /a FILE_COUNT+=1
-                        if "!DEBUG_MODE!"=="1" echo [DEBUG] Added BSL: !REL_PATH!
-                        
-                        REM Добавляем все файлы из подкаталога Ext
-                        if exist "!CONFIG_DIR!\%%a\%%b\Ext\" (
-                            for /r "!CONFIG_DIR!\%%a\%%b\Ext" %%e in (*) do (
-                                set "EXT_FILE=%%e"
-                                set "EXT_REL=!EXT_FILE:*%CONFIG_DIR%\=!"
-                                echo !EXT_REL!>> "!TEMP_LIST!"
-                                set /a FILE_COUNT+=1
-                                if "!DEBUG_MODE!"=="1" echo [DEBUG] Added additional file: !EXT_REL!
-                            )
-                        )
-                    )
-                )
-            )
-        )
-    )
+REM Обрабатываем файлы построчно (используем PowerShell для обработки)
+powershell -NoProfile -ExecutionPolicy Bypass -File "process-config-files.ps1" -ChangedFilesPath "!TEMP_DIR!\\changed_files.txt" -ConfigDir "!CONFIG_DIR!" -TempList "!TEMP_LIST!" -DebugMode "!DEBUG_MODE!"
+
+REM Подсчитываем количество файлов
+if exist "!TEMP_LIST!" (
+    for /f %%i in ('type "!TEMP_LIST!" ^| find /c /v ""') do set "FILE_COUNT=%%i"
+) else (
+    set "FILE_COUNT=0"
 )
+
 
 REM Убираем дубликаты и создаем финальный список
 if exist "!TEMP_LIST!" (
-    (for /f "usebackq delims=" %%i in ("!TEMP_LIST!") do echo %%i) | sort | uniq > "!LIST_FILE!"
+    type "!TEMP_LIST!" | sort /unique > "!LIST_FILE!"
     del "!TEMP_LIST!"
 )
 
@@ -298,7 +287,11 @@ set "FILE_COUNT=0"
 for /f %%i in ('type "!LIST_FILE!" ^| find /c /v ""') do set "FILE_COUNT=%%i"
 
 if "!FILE_COUNT!"=="0" (
-    echo No configuration files found for loading in commit !COMMIT_ID!
+    if "!COMMIT_ID!"=="" (
+        echo No configuration files found in uncommitted changes
+    ) else (
+        echo No configuration files found for loading in commit !COMMIT_ID!
+    )
     goto cleanup
 )
 
@@ -309,6 +302,41 @@ if "!DEBUG_MODE!"=="1" (
     type "!LIST_FILE!"
 )
 
+REM Проверка существования 1cv8.exe
+set "V8_EXISTS=0"
+
+REM Проверяем абсолютный путь
+if exist "!V8_PATH!" (
+    set "V8_EXISTS=1"
+) else (
+    REM Проверяем в PATH
+    where "!V8_PATH!" >nul 2>&1
+    if !ERRORLEVEL! EQU 0 (
+        set "V8_EXISTS=1"
+    )
+)
+
+if "!V8_EXISTS!"=="0" (
+    echo.
+    echo [ERROR] 1C:Enterprise platform ^(1cv8.exe^) not found
+    echo.
+    echo Checked path: !V8_PATH!
+    echo.
+    echo Please check:
+    echo   1. 1C:Enterprise is installed
+    echo   2. Correct path specified in /v8 parameter or V8_PATH environment variable
+    echo   3. 1cv8.exe is in system PATH ^(if using relative path^)
+    echo.
+    echo Examples:
+    echo   set V8_PATH=C:\Program Files\1cv8\8.3.24.1467\bin\1cv8.exe
+    echo   partial-load-config.cmd /v8 "C:\Program Files\1cv8\8.3.24.1467\bin\1cv8.exe"
+    echo.
+    set "EXIT_CODE=1"
+    goto cleanup
+)
+
+if "!DEBUG_MODE!"=="1" echo [DEBUG] Using 1C platform: !V8_PATH!
+
 REM Формирование командной строки для 1cv8
 set "CMD_LINE="!V8_PATH!" DESIGNER"
 
@@ -316,7 +344,7 @@ REM Параметры подключения к ИБ
 if not "!IB_NAME!"=="" (
     set "CMD_LINE=!CMD_LINE! /IBName "!IB_NAME!""
 ) else (
-    set "CMD_LINE=!CMD_LINE! /F "!IB_PATH!""
+    set "CMD_LINE=!CMD_LINE! /F !IB_PATH!"
 )
 
 REM Учетные данные
@@ -376,7 +404,7 @@ if "!UPDATE_DB!"=="1" (
     if not "!IB_NAME!"=="" (
         set "UPDATE_CMD=!UPDATE_CMD! /IBName "!IB_NAME!""
     ) else (
-        set "UPDATE_CMD=!UPDATE_CMD! /F "!IB_PATH!""
+        set "UPDATE_CMD=!UPDATE_CMD! /F !IB_PATH!"
     )
     if not "!USER_NAME!"=="" set "UPDATE_CMD=!UPDATE_CMD! /N "!USER_NAME!""
     if not "!USER_PWD!"=="" set "UPDATE_CMD=!UPDATE_CMD! /P "!USER_PWD!""
@@ -421,7 +449,7 @@ if "!RUN_ENTERPRISE!"=="1" (
     if not "!IB_NAME!"=="" (
         set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /IBName "!IB_NAME!""
     ) else (
-        set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /F "!IB_PATH!""
+        set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /F !IB_PATH!"
     )
     if not "!USER_NAME!"=="" set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /N "!USER_NAME!""
     if not "!USER_PWD!"=="" set "ENTERPRISE_CMD=!ENTERPRISE_CMD! /P "!USER_PWD!""
@@ -462,7 +490,7 @@ echo Usage:
 echo   %~nx0 ^<commit-id^> [options]
 echo.
 echo Parameters:
-echo   ^<commit-id^>     - Git commit identifier
+echo   ^<commit-id^>     - Git commit identifier (optional - if not specified, checks uncommitted changes)
 echo   /ib ^<path^>      - Path to infobase or connection string
 echo   /ibname ^<name^>  - Infobase name from list
 echo   /n ^<user^>       - Username
@@ -478,6 +506,7 @@ echo   /navlink ^<url^>  - Navigation link to open in 1C:Enterprise
 echo   /runep ^<path^>   - Path to external data processor to run
 echo.
 echo Examples:
+echo   %~nx0 /ib "C:\Bases\MyBase"                              (load uncommitted changes)
 echo   %~nx0 a3f5b21 /ib "C:\Bases\MyBase" /n Admin
 echo   %~nx0 HEAD~1 /ibname "MyBase" /configdir ".\src"
 echo   %~nx0 HEAD /ib "C:\Bases\MyBase" /updatedb

@@ -67,7 +67,7 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true, Position=0)]
+    [Parameter(Mandatory=$false, Position=0)]
     [string]$CommitId,
     
     [Parameter(Mandatory=$false)]
@@ -111,12 +111,15 @@ param(
     [string]$ExternalDataProcessor
 )
 
+# Устанавливаем кодировку для текущей сессии PowerShell
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 # Функция для загрузки переменных окружения из .env файла
 function Import-EnvFile {
     param([string]$EnvFilePath = ".env")
     
     if (Test-Path $EnvFilePath) {
-        Get-Content $EnvFilePath | ForEach-Object {
+        Get-Content $EnvFilePath -Encoding UTF8 | ForEach-Object {
             $line = $_.Trim()
             # Пропускаем пустые строки и комментарии
             if ($line -and -not $line.StartsWith('#')) {
@@ -266,57 +269,105 @@ Write-DebugInfo "Temp directory: $tempDir"
 $listFile = Join-Path $tempDir "load_list.txt"
 
 try {
-    Write-Host "Getting changed files from commit $CommitId to current state..." -ForegroundColor Green
-    
-    # Получаем изменения от указанного коммита до HEAD
-    Write-DebugInfo "Getting changes from $CommitId to HEAD..."
-    $commitToHead = git diff --name-only "$CommitId..HEAD" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-ErrorInfo "Error getting changes from commit to HEAD"
-        Write-Host $commitToHead
-        exit 1
-    }
-    
-    # Получаем staged изменения
-    Write-DebugInfo "Getting staged changes..."
-    $stagedFiles = git diff --cached --name-only 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-ErrorInfo "Error getting staged changes"
-        Write-Host $stagedFiles
-        exit 1
-    }
-    
-    # Получаем unstaged изменения (измененные файлы)
-    Write-DebugInfo "Getting unstaged changes..."
-    $unstagedFiles = git diff --name-only 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-ErrorInfo "Error getting unstaged changes"
-        Write-Host $unstagedFiles
-        exit 1
-    }
-    
-    # Получаем untracked файлы (новые файлы, не добавленные в git)
-    Write-DebugInfo "Getting untracked files..."
-    $untrackedFiles = git ls-files --others --exclude-standard 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-ErrorInfo "Error getting untracked files"
-        Write-Host $untrackedFiles
-        exit 1
-    }
-    
-    # Объединяем все изменения и убираем дубликаты
     $changedFiles = @()
-    $changedFiles += $commitToHead
-    $changedFiles += $stagedFiles
-    $changedFiles += $unstagedFiles
-    $changedFiles += $untrackedFiles
-    $changedFiles = $changedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
     
-    Write-DebugInfo "Changes from $CommitId to HEAD: $(($commitToHead | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
-    Write-DebugInfo "Staged changes: $(($stagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
-    Write-DebugInfo "Unstaged changes: $(($unstagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
-    Write-DebugInfo "Untracked files: $(($untrackedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
-    Write-DebugInfo "Total unique files: $($changedFiles.Count)"
+    if ([string]::IsNullOrWhiteSpace($CommitId)) {
+        Write-Host "Checking for uncommitted changes..." -ForegroundColor Green
+        
+        # Получаем staged изменения
+        Write-DebugInfo "Getting staged changes..."
+        $stagedFiles = git diff --cached --name-only 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting staged changes"
+            Write-Host $stagedFiles
+            exit 1
+        }
+        
+        # Получаем unstaged изменения (измененные файлы)
+        Write-DebugInfo "Getting unstaged changes..."
+        $unstagedFiles = git diff --name-only 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting unstaged changes"
+            Write-Host $unstagedFiles
+            exit 1
+        }
+        
+        # Получаем untracked файлы (новые файлы, не добавленные в git)
+        Write-DebugInfo "Getting untracked files..."
+        $untrackedFiles = git ls-files --others --exclude-standard 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting untracked files"
+            Write-Host $untrackedFiles
+            exit 1
+        }
+        
+        # Объединяем все незафиксированные изменения
+        $changedFiles += $stagedFiles
+        $changedFiles += $unstagedFiles
+        $changedFiles += $untrackedFiles
+        $changedFiles = $changedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+        
+        Write-DebugInfo "Staged changes: $(($stagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Unstaged changes: $(($unstagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Untracked files: $(($untrackedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Total unique uncommitted files: $($changedFiles.Count)"
+        
+        if ($changedFiles.Count -eq 0) {
+            Write-Host "No uncommitted changes found" -ForegroundColor Yellow
+            exit 0
+        }
+    } else {
+        Write-Host "Getting changed files from commit $CommitId to current state..." -ForegroundColor Green
+        
+        # Получаем изменения от указанного коммита до HEAD
+        Write-DebugInfo "Getting changes from $CommitId to HEAD..."
+        $commitToHead = git diff --name-only "$CommitId..HEAD" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting changes from commit to HEAD"
+            Write-Host $commitToHead
+            exit 1
+        }
+        
+        # Получаем staged изменения
+        Write-DebugInfo "Getting staged changes..."
+        $stagedFiles = git diff --cached --name-only 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting staged changes"
+            Write-Host $stagedFiles
+            exit 1
+        }
+        
+        # Получаем unstaged изменения (измененные файлы)
+        Write-DebugInfo "Getting unstaged changes..."
+        $unstagedFiles = git diff --name-only 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting unstaged changes"
+            Write-Host $unstagedFiles
+            exit 1
+        }
+        
+        # Получаем untracked файлы (новые файлы, не добавленные в git)
+        Write-DebugInfo "Getting untracked files..."
+        $untrackedFiles = git ls-files --others --exclude-standard 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorInfo "Error getting untracked files"
+            Write-Host $untrackedFiles
+            exit 1
+        }
+        
+        # Объединяем все изменения и убираем дубликаты
+        $changedFiles += $commitToHead
+        $changedFiles += $stagedFiles
+        $changedFiles += $unstagedFiles
+        $changedFiles += $untrackedFiles
+        $changedFiles = $changedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+        
+        Write-DebugInfo "Changes from $CommitId to HEAD: $(($commitToHead | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Staged changes: $(($stagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Unstaged changes: $(($unstagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Untracked files: $(($untrackedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+        Write-DebugInfo "Total unique files: $($changedFiles.Count)"
+    }
     Write-Host "Preparing file list for loading..." -ForegroundColor Green
     
     $configFiles = @()
@@ -381,7 +432,11 @@ try {
     }
     
     if ($configFiles.Count -eq 0) {
-        Write-Host "No configuration files found for loading in commit $CommitId" -ForegroundColor Yellow
+        if ([string]::IsNullOrWhiteSpace($CommitId)) {
+            Write-Host "No configuration files found in uncommitted changes" -ForegroundColor Yellow
+        } else {
+            Write-Host "No configuration files found for loading in commit $CommitId" -ForegroundColor Yellow
+        }
         exit 0
     }
     
@@ -393,6 +448,41 @@ try {
         Write-DebugInfo "List file content:"
         Get-Content $listFile | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
     }
+    
+    # Проверка существования 1cv8.exe
+    $v8Exists = $false
+    if ([System.IO.Path]::IsPathRooted($V8Path)) {
+        # Абсолютный путь - проверяем напрямую
+        $v8Exists = Test-Path $V8Path
+    } else {
+        # Относительный путь или имя файла - проверяем в PATH
+        try {
+            $null = Get-Command $V8Path -ErrorAction Stop
+            $v8Exists = $true
+        } catch {
+            $v8Exists = $false
+        }
+    }
+    
+    if (-not $v8Exists) {
+        Write-Host ""
+        Write-ErrorInfo "1C:Enterprise platform (1cv8.exe) not found"
+        Write-Host ""
+        Write-Host "Checked path: $V8Path" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Please check:" -ForegroundColor Cyan
+        Write-Host "  1. 1C:Enterprise is installed" -ForegroundColor Gray
+        Write-Host "  2. Correct path specified in V8_PATH parameter or .env file" -ForegroundColor Gray
+        Write-Host "  3. 1cv8.exe is in system PATH (if using relative path)" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "Examples:" -ForegroundColor Cyan
+        Write-Host "  V8_PATH=`"C:\Program Files\1cv8\8.3.24.1467\bin\1cv8.exe`"" -ForegroundColor Gray
+        Write-Host "  -V8Path `"C:\Program Files\1cv8\8.3.24.1467\bin\1cv8.exe`"" -ForegroundColor Gray
+        Write-Host ""
+        exit 1
+    }
+    
+    Write-DebugInfo "Using 1C platform: $V8Path"
     
     # Формирование командной строки для 1cv8
     $arguments = @("DESIGNER")
