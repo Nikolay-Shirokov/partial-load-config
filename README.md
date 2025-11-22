@@ -143,8 +143,11 @@ partial-load-config.cmd feature/new-report ^
    # Staged изменения (git add)
    git diff --cached --name-only
    
-   # Unstaged изменения (рабочий каталог)
+   # Unstaged изменения (измененные файлы)
    git diff --name-only
+   
+   # Untracked файлы (новые файлы, не добавленные в git)
+   git ls-files --others --exclude-standard
    ```
    
    Все списки объединяются, дубликаты удаляются.

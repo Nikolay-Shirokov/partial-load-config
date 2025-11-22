@@ -185,7 +185,7 @@ if errorlevel 1 (
     goto cleanup
 )
 
-REM Получаем unstaged изменения
+REM Получаем unstaged изменения (измененные файлы)
 if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting unstaged changes...
 git diff --name-only > "!TEMP_DIR!\unstaged.txt" 2>&1
 if errorlevel 1 (
@@ -194,14 +194,24 @@ if errorlevel 1 (
     goto cleanup
 )
 
+REM Получаем untracked файлы (новые файлы, не добавленные в git)
+if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting untracked files...
+git ls-files --others --exclude-standard > "!TEMP_DIR!\untracked.txt" 2>&1
+if errorlevel 1 (
+    echo Error getting untracked files
+    type "!TEMP_DIR!\untracked.txt"
+    goto cleanup
+)
+
 REM Объединяем все файлы
-type "!TEMP_DIR!\commit_to_head.txt" "!TEMP_DIR!\staged.txt" "!TEMP_DIR!\unstaged.txt" > "!TEMP_DIR!\all_changes.txt" 2>nul
+type "!TEMP_DIR!\commit_to_head.txt" "!TEMP_DIR!\staged.txt" "!TEMP_DIR!\unstaged.txt" "!TEMP_DIR!\untracked.txt" > "!TEMP_DIR!\all_changes.txt" 2>nul
 
 REM Подсчет статистики для отладки
 if "!DEBUG_MODE!"=="1" (
     for /f %%i in ('type "!TEMP_DIR!\commit_to_head.txt" ^| find /c /v ""') do echo [DEBUG] Changes from !COMMIT_ID! to HEAD: %%i files
     for /f %%i in ('type "!TEMP_DIR!\staged.txt" ^| find /c /v ""') do echo [DEBUG] Staged changes: %%i files
     for /f %%i in ('type "!TEMP_DIR!\unstaged.txt" ^| find /c /v ""') do echo [DEBUG] Unstaged changes: %%i files
+    for /f %%i in ('type "!TEMP_DIR!\untracked.txt" ^| find /c /v ""') do echo [DEBUG] Untracked files: %%i files
 )
 
 REM Убираем дубликаты и пустые строки

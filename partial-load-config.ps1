@@ -189,7 +189,7 @@ try {
         exit 1
     }
     
-    # Получаем unstaged изменения
+    # Получаем unstaged изменения (измененные файлы)
     Write-DebugInfo "Getting unstaged changes..."
     $unstagedFiles = git diff --name-only 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -198,16 +198,27 @@ try {
         exit 1
     }
     
+    # Получаем untracked файлы (новые файлы, не добавленные в git)
+    Write-DebugInfo "Getting untracked files..."
+    $untrackedFiles = git ls-files --others --exclude-standard 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorInfo "Error getting untracked files"
+        Write-Host $untrackedFiles
+        exit 1
+    }
+    
     # Объединяем все изменения и убираем дубликаты
     $changedFiles = @()
     $changedFiles += $commitToHead
     $changedFiles += $stagedFiles
     $changedFiles += $unstagedFiles
+    $changedFiles += $untrackedFiles
     $changedFiles = $changedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
     
     Write-DebugInfo "Changes from $CommitId to HEAD: $(($commitToHead | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
     Write-DebugInfo "Staged changes: $(($stagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
     Write-DebugInfo "Unstaged changes: $(($unstagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+    Write-DebugInfo "Untracked files: $(($untrackedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
     Write-DebugInfo "Total unique files: $($changedFiles.Count)"
     Write-Host "Preparing file list for loading..." -ForegroundColor Green
     
