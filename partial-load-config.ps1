@@ -169,16 +169,46 @@ Write-DebugInfo "Temp directory: $tempDir"
 $listFile = Join-Path $tempDir "load_list.txt"
 
 try {
-    Write-Host "Getting changed files from commit $CommitId..." -ForegroundColor Green
+    Write-Host "Getting changed files from commit $CommitId to current state..." -ForegroundColor Green
     
-    $changedFiles = git show --pretty="" --name-only $CommitId 2>&1
+    # Получаем изменения от указанного коммита до HEAD
+    Write-DebugInfo "Getting changes from $CommitId to HEAD..."
+    $commitToHead = git diff --name-only "$CommitId..HEAD" 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-ErrorInfo "Error getting files from git"
-        Write-Host $changedFiles
+        Write-ErrorInfo "Error getting changes from commit to HEAD"
+        Write-Host $commitToHead
         exit 1
     }
     
-    Write-DebugInfo "Total changed files: $($changedFiles.Count)"
+    # Получаем staged изменения
+    Write-DebugInfo "Getting staged changes..."
+    $stagedFiles = git diff --cached --name-only 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorInfo "Error getting staged changes"
+        Write-Host $stagedFiles
+        exit 1
+    }
+    
+    # Получаем unstaged изменения
+    Write-DebugInfo "Getting unstaged changes..."
+    $unstagedFiles = git diff --name-only 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorInfo "Error getting unstaged changes"
+        Write-Host $unstagedFiles
+        exit 1
+    }
+    
+    # Объединяем все изменения и убираем дубликаты
+    $changedFiles = @()
+    $changedFiles += $commitToHead
+    $changedFiles += $stagedFiles
+    $changedFiles += $unstagedFiles
+    $changedFiles = $changedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+    
+    Write-DebugInfo "Changes from $CommitId to HEAD: $(($commitToHead | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+    Write-DebugInfo "Staged changes: $(($stagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+    Write-DebugInfo "Unstaged changes: $(($unstagedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count) files"
+    Write-DebugInfo "Total unique files: $($changedFiles.Count)"
     Write-Host "Preparing file list for loading..." -ForegroundColor Green
     
     $configFiles = @()

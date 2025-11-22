@@ -164,13 +164,51 @@ if "!DEBUG_MODE!"=="1" (
     echo [DEBUG] List file: !LIST_FILE!
 )
 
-REM Получение списка измененных файлов из коммита
-echo Getting changed files from commit !COMMIT_ID!...
-git show --pretty="" --name-only !COMMIT_ID! > "!TEMP_DIR!\changed_files.txt" 2>&1
+REM Получение списка измененных файлов от коммита до текущего состояния
+echo Getting changed files from commit !COMMIT_ID! to current state...
+
+REM Получаем изменения от коммита до HEAD
+if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting changes from !COMMIT_ID! to HEAD...
+git diff --name-only "!COMMIT_ID!..HEAD" > "!TEMP_DIR!\commit_to_head.txt" 2>&1
 if errorlevel 1 (
-    echo Error getting files from git
-    type "!TEMP_DIR!\changed_files.txt"
+    echo Error getting changes from commit to HEAD
+    type "!TEMP_DIR!\commit_to_head.txt"
     goto cleanup
+)
+
+REM Получаем staged изменения
+if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting staged changes...
+git diff --cached --name-only > "!TEMP_DIR!\staged.txt" 2>&1
+if errorlevel 1 (
+    echo Error getting staged changes
+    type "!TEMP_DIR!\staged.txt"
+    goto cleanup
+)
+
+REM Получаем unstaged изменения
+if "!DEBUG_MODE!"=="1" echo [DEBUG] Getting unstaged changes...
+git diff --name-only > "!TEMP_DIR!\unstaged.txt" 2>&1
+if errorlevel 1 (
+    echo Error getting unstaged changes
+    type "!TEMP_DIR!\unstaged.txt"
+    goto cleanup
+)
+
+REM Объединяем все файлы
+type "!TEMP_DIR!\commit_to_head.txt" "!TEMP_DIR!\staged.txt" "!TEMP_DIR!\unstaged.txt" > "!TEMP_DIR!\all_changes.txt" 2>nul
+
+REM Подсчет статистики для отладки
+if "!DEBUG_MODE!"=="1" (
+    for /f %%i in ('type "!TEMP_DIR!\commit_to_head.txt" ^| find /c /v ""') do echo [DEBUG] Changes from !COMMIT_ID! to HEAD: %%i files
+    for /f %%i in ('type "!TEMP_DIR!\staged.txt" ^| find /c /v ""') do echo [DEBUG] Staged changes: %%i files
+    for /f %%i in ('type "!TEMP_DIR!\unstaged.txt" ^| find /c /v ""') do echo [DEBUG] Unstaged changes: %%i files
+)
+
+REM Убираем дубликаты и пустые строки
+(for /f "usebackq delims=" %%f in ("!TEMP_DIR!\all_changes.txt") do echo %%f) | sort | uniq > "!TEMP_DIR!\changed_files.txt"
+
+if "!DEBUG_MODE!"=="1" (
+    for /f %%i in ('type "!TEMP_DIR!\changed_files.txt" ^| find /c /v ""') do echo [DEBUG] Total unique files: %%i
 )
 
 REM Фильтрация файлов конфигурации и создание списка для загрузки
