@@ -101,7 +101,7 @@ if ($Password) { $dumpConfigParams['Password'] = $Password }
 if ($Format) { $dumpConfigParams['Format'] = $Format }
 if ($V8Path) { $dumpConfigParams['V8Path'] = $V8Path }
 if ($OutFile) { $dumpConfigParams['OutFile'] = $OutFile }
-if ($DebugMode) { $dumpConfigParams['DebugMode'] = $true }
+if ($DebugMode) { $dumpConfigParams['DebugMode'] = $DebugMode }
 if ($Extension) { $dumpConfigParams['Extension'] = $Extension }
 if ($AllExtensions) { $dumpConfigParams['AllExtensions'] = $true }
 

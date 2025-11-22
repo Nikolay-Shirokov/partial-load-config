@@ -131,7 +131,6 @@ param(
 # Устанавливаем кодировку для текущей сессии PowerShell
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
 # Функция для загрузки переменных окружения из .env файла
 function Import-EnvFile {
     param([string]$EnvFilePath = ".env")

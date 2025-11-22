@@ -514,6 +514,19 @@ $arguments += "-Extension", "`"MyExtension`""
 ```
 
 ## Устранение неполадок
+### Скрипт открывается в Блокноте вместо выполнения
+Если при запуске `.ps1` файла он открывается в текстовом редакторе, это означает, что в вашей системе для этого типа файлов не настроено действие "Выполнить".
+
+Для принудительного выполнения используйте `powershell.exe`:
+
+```powershell
+# Пример для полной выгрузки
+powershell.exe -ExecutionPolicy Bypass -File .\dump-full-config.ps1
+
+# Пример для частичной загрузки
+powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId "HEAD"
+```
+
 
 ### Ошибка: "git не найден"
 Установите git и добавьте его в PATH
