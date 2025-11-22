@@ -10,3 +10,6 @@
 config_changes.txt
 # Файл со списком объектов для частичной выгрузки
 dump_objects.txt
+
+# Временный файл для частичной выгрузки
+partial_dump_list.txt

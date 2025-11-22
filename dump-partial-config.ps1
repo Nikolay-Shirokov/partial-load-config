@@ -81,7 +81,7 @@ param(
     [Parameter(Mandatory=$false)]
     [switch]$DebugMode,
     
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$ObjectsListFile,
     
     [Parameter(Mandatory=$false)]
@@ -93,34 +93,18 @@ $dumpConfigParams = @{
     Mode = "Partial"
 }
 
-# Проверяем наличие файла
-if (-not (Test-Path $ObjectsListFile)) {
-    Write-Host "Error: Objects list file not found: $ObjectsListFile" -ForegroundColor Red
-    exit 1
-}
-
-# Читаем содержимое файла в массив, пропуская пустые строки
-$objectsToDump = Get-Content -Path $ObjectsListFile -Encoding UTF8 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-
-if ($objectsToDump.Count -eq 0) {
-    Write-Host "Warning: Objects list file is empty. Nothing to dump." -ForegroundColor Yellow
-    exit 0
-}
-
 # Передаем все остальные параметры, если они указаны
-if ($ConfigDir) { $dumpConfigParams['OutputDir'] = $ConfigDir }
-if ($InfoBasePath) { $dumpConfigParams['InfoBasePath'] = $InfoBasePath }
-if ($InfoBaseName) { $dumpConfigParams['InfoBaseName'] = $InfoBaseName }
-if ($UserName) { $dumpConfigParams['UserName'] = $UserName }
-if ($Password) { $dumpConfigParams['Password'] = $Password }
-if ($Format) { $dumpConfigParams['Format'] = $Format }
-if ($V8Path) { $dumpConfigParams['V8Path'] = $V8Path }
-if ($OutFile) { $dumpConfigParams['OutFile'] = $OutFile }
-if ($DebugMode) { $dumpConfigParams['DebugMode'] = $true }
-if ($Extension) { $dumpConfigParams['Extension'] = $Extension }
-
-# Передаем прочитанный массив объектов
-$dumpConfigParams['Objects'] = $objectsToDump
+if ($PSBoundParameters.ContainsKey('ConfigDir')) { $dumpConfigParams['OutputDir'] = $ConfigDir }
+if ($PSBoundParameters.ContainsKey('InfoBasePath')) { $dumpConfigParams['InfoBasePath'] = $InfoBasePath }
+if ($PSBoundParameters.ContainsKey('InfoBaseName')) { $dumpConfigParams['InfoBaseName'] = $InfoBaseName }
+if ($PSBoundParameters.ContainsKey('UserName')) { $dumpConfigParams['UserName'] = $UserName }
+if ($PSBoundParameters.ContainsKey('Password')) { $dumpConfigParams['Password'] = $Password }
+if ($PSBoundParameters.ContainsKey('Format')) { $dumpConfigParams['Format'] = $Format }
+if ($PSBoundParameters.ContainsKey('V8Path')) { $dumpConfigParams['V8Path'] = $V8Path }
+if ($PSBoundParameters.ContainsKey('OutFile')) { $dumpConfigParams['OutFile'] = $OutFile }
+if ($PSBoundParameters.ContainsKey('DebugMode')) { $dumpConfigParams['DebugMode'] = $true }
+if ($PSBoundParameters.ContainsKey('ObjectsListFile')) { $dumpConfigParams['ObjectsListFile'] = $ObjectsListFile }
+if ($PSBoundParameters.ContainsKey('Extension')) { $dumpConfigParams['Extension'] = $Extension }
 
 # Вызываем основной скрипт
 $scriptPath = Join-Path $PSScriptRoot "dump-config.ps1"
