@@ -111,8 +111,105 @@ param(
     [string]$ExternalDataProcessor
 )
 
+# Функция для загрузки переменных окружения из .env файла
+function Import-EnvFile {
+    param([string]$EnvFilePath = ".env")
+    
+    if (Test-Path $EnvFilePath) {
+        Get-Content $EnvFilePath | ForEach-Object {
+            $line = $_.Trim()
+            # Пропускаем пустые строки и комментарии
+            if ($line -and -not $line.StartsWith('#')) {
+                if ($line -match '^([^=]+)=(.*)$') {
+                    $name = $matches[1].Trim()
+                    $value = $matches[2].Trim()
+                    # Удаляем кавычки если есть
+                    $value = $value -replace '^["'']|["'']$', ''
+                    [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+                }
+            }
+        }
+        return $true
+    }
+    return $false
+}
+
+# Загружаем переменные окружения из .env файла (если существует)
+$envLoaded = Import-EnvFile
+if ($envLoaded) {
+    Write-Verbose "Environment variables loaded from .env file"
+}
+
 # Установка кодировки консоли
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Приоритет: Параметр командной строки → .env файл → Значение по умолчанию
+if (-not $PSBoundParameters.ContainsKey('V8Path')) {
+    $envV8Path = [Environment]::GetEnvironmentVariable('V8_PATH', 'Process')
+    if ($envV8Path) { $V8Path = $envV8Path }
+}
+
+if (-not $PSBoundParameters.ContainsKey('ConfigDir')) {
+    $envConfigDir = [Environment]::GetEnvironmentVariable('CONFIG_DIR', 'Process')
+    if ($envConfigDir) { $ConfigDir = $envConfigDir }
+}
+
+if (-not $PSBoundParameters.ContainsKey('Format')) {
+    $envFormat = [Environment]::GetEnvironmentVariable('CONFIG_FORMAT', 'Process')
+    if ($envFormat -and ($envFormat -eq 'Hierarchical' -or $envFormat -eq 'Plain')) {
+        $Format = $envFormat
+    }
+}
+
+if (-not $PSBoundParameters.ContainsKey('InfoBasePath')) {
+    $envInfoBasePath = [Environment]::GetEnvironmentVariable('INFOBASE_PATH', 'Process')
+    if ($envInfoBasePath) { $InfoBasePath = $envInfoBasePath }
+}
+
+if (-not $PSBoundParameters.ContainsKey('InfoBaseName')) {
+    $envInfoBaseName = [Environment]::GetEnvironmentVariable('INFOBASE_NAME', 'Process')
+    if ($envInfoBaseName) { $InfoBaseName = $envInfoBaseName }
+}
+
+if (-not $PSBoundParameters.ContainsKey('UserName')) {
+    $envUserName = [Environment]::GetEnvironmentVariable('USERNAME_1C', 'Process')
+    if ($envUserName) { $UserName = $envUserName }
+}
+
+if (-not $PSBoundParameters.ContainsKey('Password')) {
+    $envPassword = [Environment]::GetEnvironmentVariable('PASSWORD_1C', 'Process')
+    if ($envPassword) { $Password = $envPassword }
+}
+
+if (-not $PSBoundParameters.ContainsKey('OutFile')) {
+    $envOutFile = [Environment]::GetEnvironmentVariable('OUT_FILE', 'Process')
+    if ($envOutFile) { $OutFile = $envOutFile }
+}
+
+if (-not $PSBoundParameters.ContainsKey('DebugMode')) {
+    $envDebugMode = [Environment]::GetEnvironmentVariable('DEBUG_MODE', 'Process')
+    if ($envDebugMode -eq 'true') { $DebugMode = $true }
+}
+
+if (-not $PSBoundParameters.ContainsKey('UpdateDB')) {
+    $envUpdateDB = [Environment]::GetEnvironmentVariable('UPDATE_DB', 'Process')
+    if ($envUpdateDB -eq 'true') { $UpdateDB = $true }
+}
+
+if (-not $PSBoundParameters.ContainsKey('RunEnterprise')) {
+    $envRunEnterprise = [Environment]::GetEnvironmentVariable('RUN_ENTERPRISE', 'Process')
+    if ($envRunEnterprise -eq 'true') { $RunEnterprise = $true }
+}
+
+if (-not $PSBoundParameters.ContainsKey('NavigationLink')) {
+    $envNavigationLink = [Environment]::GetEnvironmentVariable('NAVIGATION_LINK', 'Process')
+    if ($envNavigationLink) { $NavigationLink = $envNavigationLink }
+}
+
+if (-not $PSBoundParameters.ContainsKey('ExternalDataProcessor')) {
+    $envExternalDataProcessor = [Environment]::GetEnvironmentVariable('EXTERNAL_DATA_PROCESSOR', 'Process')
+    if ($envExternalDataProcessor) { $ExternalDataProcessor = $envExternalDataProcessor }
+}
 
 # Функция для вывода отладочной информации
 function Write-DebugInfo {
