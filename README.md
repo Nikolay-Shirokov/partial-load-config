@@ -606,28 +606,21 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 
 ### 3. Частичная выгрузка (Partial)
 
-Выгружает только конкретные объекты из списка.
+Выгружает только конкретные объекты из списка в файле.
 
 ```powershell
+# Создаем файл со списком объектов (по-умолчанию dump_objects.txt)
+"Справочник.Номенклатура" | Out-File dump_objects.txt -Encoding utf8
+"Документ.РеализацияТоваровУслуг" | Add-Content dump_objects.txt -Encoding utf8
+
 # Используя обертку
-.\dump-partial-config.ps1 -ObjectsListFile "objects.txt" `
+.\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" `
     -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase"
-
-# С отладкой
-.\dump-partial-config.ps1 -ObjectsListFile "objects.txt" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -DebugMode
 ```
 
-**Формат файла списка объектов (objects.txt):**
-```
-Catalogs/Справочник1.xml
-Documents/Документ1.xml
-Reports/Отчет1.xml
-Configuration.Help
-Configuration.Справочник1.Splash
-```
+**Формат файла списка объектов:**
+В файле указываются **имена объектов метаданных** (например, `Справочник.Номенклатура`), по одному на строку.
 
 **Использование:**
 - Выгрузка конкретных объектов для анализа
@@ -659,7 +652,7 @@ Configuration.Справочник1.Splash
 
 | Параметр | Описание |
 |----------|----------|
-| `ObjectsListFile` | Файл со списком объектов для выгрузки (обязательный) |
+| `ObjectsListFile` | Файл со списком имен объектов метаданных для выгрузки (обязательный). |
 
 ### Дополнительные параметры
 
@@ -681,7 +674,7 @@ Configuration.Справочник1.Splash
 ```ini
 # Выгрузка конфигурации
 DUMP_MODE=Changes
-DUMP_OBJECTS_LIST=dump_objects.txt
+DUMP_OBJECTS_LIST=objects.txt
 DUMP_CHANGES_FILE=config_changes.txt
 ```
 
@@ -733,15 +726,15 @@ Get-Content what_changed.txt
 ### Сценарий 3: Выгрузка конкретных объектов
 
 ```powershell
-# Создаем список объектов
+# Создаем файл со списком объектов
 @"
-Catalogs/Номенклатура.xml
-Documents/РеализацияТоваров.xml
-Reports/АнализПродаж.xml
-"@ | Out-File objects.txt -Encoding UTF8
+Справочник.Номенклатура
+Документ.РеализацияТоваровУслуг
+Отчет.АнализПродаж
+"@ | Out-File dump_objects.txt -Encoding UTF8
 
 # Выгружаем только эти объекты
-.\dump-partial-config.ps1 -ObjectsListFile "objects.txt" `
+.\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" `
     -ConfigDir "selected_objects" `
     -InfoBasePath "C:\Bases\MyBase"
 ```

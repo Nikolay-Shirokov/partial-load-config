@@ -38,8 +38,8 @@
 .PARAMETER DebugMode
     Режим отладки с дополнительным выводом
 
-.PARAMETER ObjectsListFile
-    Файл со списком объектов для частичной выгрузки (для режима Partial)
+.PARAMETER Objects
+    Массив имен объектов метаданных для частичной выгрузки (для режима Partial).
 
 .PARAMETER ChangesFile
     Файл для сохранения списка изменений (для режима Changes)
@@ -66,7 +66,7 @@
     .\dump-config.ps1 -Mode Changes -ChangesFile "changes.txt" -InfoBaseName "MyBase"
 
 .EXAMPLE
-    .\dump-config.ps1 -Mode Partial -ObjectsListFile "objects.txt" -InfoBasePath "C:\Bases\MyBase"
+    .\dump-config.ps1 -Mode Partial -Objects @("Справочник.Номенклатура", "Документ.РеализацияТоваровУслуг") -InfoBasePath "C:\Bases\MyBase"
 
 .NOTES
     Требует: 1cv8.exe
@@ -108,7 +108,7 @@ param(
     [switch]$DebugMode,
     
     [Parameter(Mandatory=$false)]
-    [string]$ObjectsListFile,
+    [string[]]$Objects,
     
     [Parameter(Mandatory=$false)]
     [string]$ChangesFile,
@@ -222,9 +222,8 @@ if (-not $PSBoundParameters.ContainsKey('DebugMode')) {
     if ($envDebugMode -eq 'true') { $DebugMode = $true }
 }
 
-if (-not $PSBoundParameters.ContainsKey('ObjectsListFile')) {
-    $envObjectsListFile = [Environment]::GetEnvironmentVariable('DUMP_OBJECTS_LIST', 'Process')
-    if ($envObjectsListFile) { $ObjectsListFile = $envObjectsListFile }
+if (-not $PSBoundParameters.ContainsKey('Objects')) {
+    # .env для этого параметра больше не поддерживается
 }
 
 if (-not $PSBoundParameters.ContainsKey('ChangesFile')) {
@@ -257,17 +256,10 @@ if (-not $InfoBasePath -and -not $InfoBaseName) {
 }
 
 # Проверка параметров для режима Partial
-if ($Mode -eq "Partial") {
-    if (-not $ObjectsListFile) {
-        Write-ErrorInfo "ObjectsListFile required for Partial mode"
-        Write-Host "Please specify file with objects list using -ObjectsListFile parameter or DUMP_OBJECTS_LIST in .env" -ForegroundColor Yellow
-        exit 1
-    }
-    
-    if (-not (Test-Path $ObjectsListFile)) {
-        Write-ErrorInfo "Objects list file not found: $ObjectsListFile"
-        exit 1
-    }
+if ($Mode -eq "Partial" -and (-not $Objects -or $Objects.Count -eq 0)) {
+    Write-ErrorInfo "At least one object required for Partial mode"
+    Write-Host "Please specify objects using -Objects parameter" -ForegroundColor Yellow
+    exit 1
 }
 
 # Создание выходного каталога если не существует
@@ -367,12 +359,18 @@ try {
         
         "Partial" {
             Write-Host "Executing partial configuration dump..." -ForegroundColor Green
-            $arguments += "-listFile", "`"$ObjectsListFile`""
-            Write-DebugInfo "Using objects list: $ObjectsListFile"
+            
+            # Создаем временный файл в КОРНЕ ПРОЕКТА, чтобы избежать проблем с путями.
+            $tempListFile = Join-Path $PSScriptRoot "partial_dump_list.txt"
+            $utf8WithBom = New-Object System.Text.UTF8Encoding($true)
+            [System.IO.File]::WriteAllLines($tempListFile, $Objects, $utf8WithBom)
+
+            $arguments += "-listFile", "`"$tempListFile`""
+            Write-DebugInfo "Using temp list file with correct encoding: $tempListFile"
             
             if ($DebugMode) {
                 Write-DebugInfo "Objects list content:"
-                Get-Content $ObjectsListFile | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+                $Objects | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
             }
         }
     }
@@ -436,6 +434,12 @@ try {
     exit $exitCode
     
 } finally {
+    # Удаляем временный файл списка, если он был создан
+    if (Test-Path $tempListFile) {
+        Remove-Item -Path $tempListFile -Force
+        Write-DebugInfo "Temporary list file deleted"
+    }
+
     if (-not $DebugMode) {
         if (Test-Path $tempDir) {
             Remove-Item -Path $tempDir -Recurse -Force

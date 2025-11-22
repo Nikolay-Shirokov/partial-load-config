@@ -3,8 +3,7 @@
     Частичная выгрузка конфигурации 1С в файлы
 
 .DESCRIPTION
-    Обертка над dump-config.ps1 для выгрузки конкретных объектов из списка.
-    Выполняет команду /DumpConfigToFiles с параметром -listFile.
+    Обертка над dump-config.ps1 для выгрузки конкретных объектов из файла.
 
 .PARAMETER ConfigDir
     Каталог для выгрузки конфигурации. Переопределяет CONFIG_DIR из .env.
@@ -34,25 +33,22 @@
     Режим отладки с дополнительным выводом
 
 .PARAMETER ObjectsListFile
-    Файл со списком объектов для выгрузки (обязательный)
+    Файл со списком имен объектов метаданных для выгрузки (обязательный).
 
 .PARAMETER Extension
     Имя расширения для выгрузки
 
 .EXAMPLE
-    .\dump-partial-config.ps1 -ObjectsListFile "objects.txt" -InfoBasePath "C:\Bases\MyBase"
+    .\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" -InfoBasePath "C:\Bases\MyBase"
 
 .EXAMPLE
-    .\dump-partial-config.ps1 -ObjectsListFile "objects.txt" -InfoBaseName "MyBase" -DebugMode
+    .\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" -InfoBaseName "MyBase" -DebugMode
 
 .NOTES
     Требует: 1cv8.exe
     Параметры можно настроить в .env файле
     
-    Формат файла списка объектов (objects.txt):
-    Catalogs/Справочник1.xml
-    Documents/Документ1.xml
-    Configuration.Help
+    Формат файла: одна строка - одно имя объекта метаданных (например, "Справочник.Номенклатура").
 #>
 
 [CmdletBinding()]
@@ -85,7 +81,7 @@ param(
     [Parameter(Mandatory=$false)]
     [switch]$DebugMode,
     
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true)]
     [string]$ObjectsListFile,
     
     [Parameter(Mandatory=$false)]
@@ -95,6 +91,20 @@ param(
 # Формируем параметры для вызова dump-config.ps1
 $dumpConfigParams = @{
     Mode = "Partial"
+}
+
+# Проверяем наличие файла
+if (-not (Test-Path $ObjectsListFile)) {
+    Write-Host "Error: Objects list file not found: $ObjectsListFile" -ForegroundColor Red
+    exit 1
+}
+
+# Читаем содержимое файла в массив, пропуская пустые строки
+$objectsToDump = Get-Content -Path $ObjectsListFile -Encoding UTF8 | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+if ($objectsToDump.Count -eq 0) {
+    Write-Host "Warning: Objects list file is empty. Nothing to dump." -ForegroundColor Yellow
+    exit 0
 }
 
 # Передаем все остальные параметры, если они указаны
@@ -107,8 +117,10 @@ if ($Format) { $dumpConfigParams['Format'] = $Format }
 if ($V8Path) { $dumpConfigParams['V8Path'] = $V8Path }
 if ($OutFile) { $dumpConfigParams['OutFile'] = $OutFile }
 if ($DebugMode) { $dumpConfigParams['DebugMode'] = $true }
-if ($ObjectsListFile) { $dumpConfigParams['ObjectsListFile'] = $ObjectsListFile }
 if ($Extension) { $dumpConfigParams['Extension'] = $Extension }
+
+# Передаем прочитанный массив объектов
+$dumpConfigParams['Objects'] = $objectsToDump
 
 # Вызываем основной скрипт
 $scriptPath = Join-Path $PSScriptRoot "dump-config.ps1"
