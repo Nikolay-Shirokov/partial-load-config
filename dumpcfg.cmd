@@ -21,6 +21,11 @@ REM Определяем каталог скрипта
 set "SCRIPT_DIR=%~dp0"
 set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
+REM Проверка на -help или -h
+if /i "%~1"=="-help" goto show_help
+if /i "%~1"=="-h" goto show_help
+if /i "%~1"=="/?" goto show_help
+
 REM Обработка параметров - ищем режим и -objects
 set "MODE="
 set "USE_PARTIAL_SCRIPT=0"
@@ -94,3 +99,50 @@ powershell.exe -ExecutionPolicy Bypass -File "%PS_SCRIPT%" !PARAMS!
 
 REM Возвращаем код возврата из PowerShell
 exit /b %ERRORLEVEL%
+
+:show_help
+echo.
+echo dumpcfg - Выгрузка конфигурации 1С в файлы
+echo ==========================================
+echo.
+echo Использование:
+echo   dumpcfg [режим] [параметры]
+echo.
+echo Примеры:
+echo   dumpcfg                           - выгрузка по умолчанию (Changes из .env)
+echo   dumpcfg Full                      - полная выгрузка
+echo   dumpcfg Changes                   - инкрементальная выгрузка
+echo   dumpcfg Partial                   - частичная выгрузка (список из .env)
+echo   dumpcfg -mode Full                - явное указание режима
+echo   dumpcfg -mode Partial -objects "Справочник.Номенклатура,Документ.Заказ"
+echo   dumpcfg -DebugMode                - выгрузка с отладкой
+echo.
+echo Режимы:
+echo   Full                              - Полная выгрузка всей конфигурации
+echo   Changes                           - Инкрементальная (только изменения)
+echo   Partial                           - Частичная (конкретные объекты)
+echo.
+echo Параметры:
+echo   -mode [режим]                     - Явное указание режима
+echo   -objects "obj1,obj2,..."          - Список объектов (режим Partial)
+echo   -ObjectsListFile "file"           - Файл со списком объектов
+echo   -ChangesFile "file"               - Файл для списка изменений
+echo   -CompareWith "file"               - ConfigDumpInfo.xml для сравнения
+echo   -Force                            - Принудительная полная выгрузка
+echo   -DebugMode                        - Режим отладки
+echo   -InfoBasePath "path"              - Путь к информационной базе
+echo   -InfoBaseName "name"              - Имя базы из списка
+echo   -UserName "name"                  - Имя пользователя
+echo   -Password "pwd"                   - Пароль
+echo   -ConfigDir "path"                 - Каталог для выгрузки (default: src)
+echo   -Format "fmt"                     - Формат: Hierarchical/Plain
+echo   -V8Path "path"                    - Путь к 1cv8.exe
+echo   -Extension "name"                 - Имя расширения для выгрузки
+echo   -AllExtensions                    - Выгрузить все расширения
+echo.
+echo Все основные параметры берутся из .env файла
+echo Параметры командной строки переопределяют значения из .env
+echo.
+echo Подробнее: см. README.md
+echo.
+exit /b 0
