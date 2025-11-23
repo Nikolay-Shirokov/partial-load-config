@@ -32,18 +32,59 @@
 - ✅ Поддержка расширений конфигурации
 - ✅ Режим отладки
 
-## Файлы
+## Структура проекта
 
-### Загрузка конфигурации
-1. **partial-load-config.ps1** - частичная загрузка из git (PowerShell)
-2. **partial-load-config.cmd** - частичная загрузка (CMD)
+```
+partial-load-config/
+├── loadcfg.cmd              # Команда быстрой загрузки конфигурации
+├── dumpcfg.cmd              # Команда быстрой выгрузки конфигурации
+├── scripts/                 # PowerShell скрипты
+│   ├── partial-load-config.ps1
+│   ├── dump-config.ps1
+│   ├── dump-full-config.ps1
+│   ├── dump-changes-config.ps1
+│   ├── dump-partial-config.ps1
+│   ├── update-dump-info.ps1
+│   └── process-config-files.ps1
+├── .env                     # Настройки проекта (не в git)
+├── .env.example             # Пример настроек
+└── README.md
+```
 
-### Выгрузка конфигурации
-1. **dump-config.ps1** - универсальный скрипт выгрузки (три режима)
-2. **dump-full-config.ps1** - обертка для полной выгрузки
-3. **dump-changes-config.ps1** - обертка для инкрементальной выгрузки
-4. **dump-partial-config.ps1** - обертка для частичной выгрузки
-5. **update-dump-info.ps1** - скрипт для обновления файла состояния выгрузки (`ConfigDumpInfo.xml`)
+## Быстрый старт
+
+### Простые команды (рекомендуется)
+
+После настройки [`.env` файла](#конфигурация-через-env-файл) используйте короткие команды:
+
+```cmd
+REM Загрузка конфигурации
+loadcfg                      :: загрузка незафиксированных изменений
+loadcfg HEAD                 :: загрузка всех изменений с последнего коммита
+loadcfg HEAD~3               :: загрузка изменений за последние 3 коммита
+loadcfg -UpdateDB            :: загрузка с обновлением БД
+loadcfg HEAD -DebugMode      :: загрузка с отладкой
+
+REM Выгрузка конфигурации
+dumpcfg                      :: выгрузка по умолчанию (Changes из .env)
+dumpcfg Full                 :: полная выгрузка
+dumpcfg Changes              :: инкрементальная выгрузка
+dumpcfg Partial              :: частичная выгрузка (список из .env)
+dumpcfg -mode Partial -objects "Справочник.Номенклатура,Документ.Заказ"
+dumpcfg -DebugMode           :: выгрузка с отладкой
+```
+
+### PowerShell скрипты (для продвинутых сценариев)
+
+Для полного контроля используйте скрипты напрямую:
+
+```powershell
+# Загрузка
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" -UpdateDB -RunEnterprise
+
+# Выгрузка
+.\scripts\dump-config.ps1 -Mode Full -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+```
 
 ## Требования
 
@@ -115,73 +156,63 @@ RUN_ENTERPRISE=false
 
 ## Использование
 
-### PowerShell (рекомендуется)
+### Короткие команды (рекомендуется)
 
-```powershell
-# Загрузка незафиксированных изменений (без указания коммита)
-.\partial-load-config.ps1
+После настройки `.env` используйте простые команды:
 
-# Загрузка изменений от конкретного коммита
-.\partial-load-config.ps1 -CommitId "a3f5b21" -InfoBasePath "C:\Bases\MyBase"
-
-# С аутентификацией
-.\partial-load-config.ps1 -CommitId "HEAD~1" `
-    -InfoBaseName "MyBase" `
-    -UserName "Admin" `
-    -Password "password"
-
-# С нестандартным каталогом конфигурации (например, src вместо config)
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\edt\IB\Эксперименты" `
-    -ConfigDir "src" `
-    -Format "Hierarchical"
-
-# С явным указанием пути к платформе 1С
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -V8Path "C:\Program Files\1cv8\8.3.27.1859\bin\1cv8.exe" `
-    -DebugMode
-
-# С автоматическим обновлением конфигурации БД
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\edt\IB\ERP_2.5.12.73" `
-    -ConfigDir "src" `
-    -UserName "Администратор" `
-    -UpdateDB
-
-# С запуском в режиме 1С:Предприятие
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -RunEnterprise
-
-# С открытием конкретного объекта
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -RunEnterprise `
-    -NavigationLink "e1cib/data/Catalog.Items"
-
-# С запуском внешней обработки
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -RunEnterprise `
-    -ExternalDataProcessor "C:\DataProcessors\MyProcessor.epf"
-```
-
-### CMD
-
+**Загрузка конфигурации:**
 ```cmd
-REM Базовый пример
-partial-load-config.cmd a3f5b21 /ib "C:\Bases\MyBase"
-
-REM С аутентификацией
-partial-load-config.cmd HEAD~1 /ibname "MyBase" /n Admin /p password
+REM Базовые примеры
+loadcfg                      :: незафиксированные изменения
+loadcfg HEAD                 :: изменения с последнего коммита
+loadcfg HEAD~3               :: изменения за последние 3 коммита
 
 REM С дополнительными параметрами
-partial-load-config.cmd feature/new-report ^
-    /ib "C:\Bases\Test" ^
-    /configdir ".\src\conf" ^
-    /format Hierarchical ^
-    /debug
+loadcfg -UpdateDB            :: с обновлением БД
+loadcfg HEAD -UpdateDB -RunEnterprise :: загрузка, обновление и запуск
+loadcfg -DebugMode           :: с отладкой
+```
+
+**Выгрузка конфигурации:**
+```cmd
+REM Базовые примеры
+dumpcfg                      :: режим из .env (обычно Changes)
+dumpcfg Full                 :: полная выгрузка
+dumpcfg Changes              :: инкрементальная выгрузка
+dumpcfg Partial              :: частичная выгрузка (список из .env)
+
+REM С параметрами
+dumpcfg -mode Full           :: явное указание режима
+dumpcfg -mode Partial -objects "Справочник.Номенклатура,Документ.Заказ"
+dumpcfg -DebugMode           :: с отладкой
+```
+
+### PowerShell скрипты (продвинутое использование)
+
+Для сложных сценариев используйте скрипты напрямую:
+
+**Загрузка:**
+```powershell
+# Базовые примеры
+.\scripts\partial-load-config.ps1
+
+# С параметрами
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" `
+    -InfoBasePath "C:\Bases\MyBase" `
+    -UpdateDB `
+    -RunEnterprise `
+    -NavigationLink "e1cib/data/Catalog.Items"
+```
+
+**Выгрузка:**
+```powershell
+# Полная выгрузка
+.\scripts\dump-config.ps1 -Mode Full -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+
+# Или используйте специализированные обертки
+.\scripts\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+.\scripts\dump-changes-config.ps1 -ChangesFile "changes.txt"
+.\scripts\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура"
 ```
 
 ## Параметры
@@ -256,127 +287,71 @@ partial-load-config.cmd feature/new-report ^
 
 ## Примеры использования
 
-### Загрузка незафиксированных изменений (быстрый режим)
+### Типичные сценарии разработки
 
+**Сценарий 1: Быстрая загрузка текущих изменений**
+```cmd
+REM Самый частый случай - загрузить то, что меняли прямо сейчас
+loadcfg
+```
+
+**Сценарий 2: Загрузка с последнего коммита и запуск**
+```cmd
+REM Загрузить изменения из последнего коммита, обновить БД и запустить
+loadcfg HEAD -UpdateDB -RunEnterprise
+```
+
+**Сценарий 3: Выгрузка изменений после работы в конфигураторе**
+```cmd
+REM Выгрузить только то, что изменилось
+dumpcfg Changes
+
+REM Посмотреть что изменилось
+type config_changes.txt
+
+REM Зафиксировать в git
+git add .
+git commit -m "Добавлен новый отчет"
+```
+
+**Сценарий 4: Выгрузка конкретных объектов для анализа**
+```cmd
+REM Быстрая выгрузка одного-двух объектов
+dumpcfg -mode Partial -objects "Справочник.Номенклатура,Отчет.ОстаткиТоваров"
+```
+
+**Сценарий 5: Полный цикл разработки**
+```cmd
+REM 1. Выгружаем изменения из продуктивной базы
+dumpcfg Changes
+git add . && git commit -m "Обновление конфигурации"
+
+REM 2. В тестовой базе загружаем изменения
+loadcfg HEAD -UpdateDB -RunEnterprise
+```
+
+### Продвинутые сценарии (PowerShell)
+
+**Загрузка изменений за период:**
 ```powershell
-# Загрузит только незафиксированные изменения (staged + unstaged + untracked)
-# Параметры подключения берутся из .env файла
-.\partial-load-config.ps1
-
-# С явным указанием базы
-.\partial-load-config.ps1 -InfoBasePath "C:\Bases\Dev"
-
-# С обновлением БД и запуском
-.\partial-load-config.ps1 -UpdateDB -RunEnterprise
+# Загрузить все изменения за последние 5 коммитов
+.\scripts\partial-load-config.ps1 -CommitId "HEAD~5" -DebugMode
 ```
 
-### Загрузка всех изменений с последнего коммита (включая незафиксированные)
-
+**Комплексный сценарий с запуском:**
 ```powershell
-# Загрузит все изменения в HEAD + staged + unstaged + untracked
-.\partial-load-config.ps1 -CommitId "HEAD" -InfoBasePath "C:\Bases\Dev"
-```
-
-### Загрузка всех изменений за последние 5 коммитов
-
-```powershell
-# Загрузит изменения из последних 5 коммитов + текущие незафиксированные
-.\partial-load-config.ps1 -CommitId "HEAD~5" -InfoBaseName "Production" -DebugMode
-```
-
-**Отладочный вывод покажет:**
-```
-[DEBUG] Getting changes from HEAD~5 to HEAD...
-[DEBUG] Getting staged changes...
-[DEBUG] Getting unstaged changes...
-[DEBUG] Changes from HEAD~5 to HEAD: 15 files
-[DEBUG] Staged changes: 3 files
-[DEBUG] Unstaged changes: 2 files
-[DEBUG] Total unique files: 18
-```
-
-### Загрузка изменений от конкретного коммита
-
-```powershell
-# Загрузит все изменения от коммита abc123 до текущего состояния
-.\partial-load-config.ps1 -CommitId "abc123" -InfoBasePath "C:\Bases\Test"
-```
-
-### Загрузка изменений от другой ветки
-
-```powershell
-# Загрузит все файлы, которые изменились относительно feature/new-module
-.\partial-load-config.ps1 -CommitId "feature/new-module" -InfoBasePath "C:\Bases\Test"
-```
-
-### Сценарий: разработка новой функциональности
-
-```powershell
-# 1. Создали ветку от master 5 коммитов назад
-git checkout -b feature/new-report HEAD~5
-
-# 2. Внесли изменения в 3 файла, но еще не зафиксировали
-# 3. Хотим загрузить ВСЕ изменения с момента создания ветки
-
-.\partial-load-config.ps1 -CommitId "HEAD~5" `
-    -InfoBasePath "C:\Bases\Dev" `
+# Загрузка, обновление БД и открытие конкретной формы
+.\scripts\partial-load-config.ps1 -CommitId "HEAD~3" `
     -UpdateDB `
     -RunEnterprise `
-    -DebugMode
-
-# Загрузится:
-# - Все изменения из 5 коммитов
-# - Ваши незафиксированные изменения в 3 файлах
+    -NavigationLink "e1cib/data/Document.SalesOrder"
 ```
 
-### Загрузка изменений с начала недели
-
+**Выгрузка с сохранением списка изменений:**
 ```powershell
-# Загрузит все изменения за неделю + незафиксированные
-.\partial-load-config.ps1 -CommitId "HEAD@{1.week.ago}" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -OutFile "C:\Logs\load_log.txt" `
-    -UpdateDB
+.\scripts\dump-changes-config.ps1 -ChangesFile "changes.txt" -DebugMode
 ```
 
-### Комплексный сценарий: от фиксации до запуска
-
-```powershell
-# 1. Сделали 3 коммита с новой функциональностью
-# 2. Есть незафиксированные изменения для тестирования
-# 3. Хотим загрузить все, обновить БД и сразу открыть нужную форму
-
-.\partial-load-config.ps1 -CommitId "HEAD~3" `
-    -InfoBasePath "C:\edt\IB\ERP" `
-    -ConfigDir "src" `
-    -UserName "Администратор" `
-    -UpdateDB `
-    -RunEnterprise `
-    -NavigationLink "e1cib/data/Document.SalesOrder" `
-    -DebugMode
-
-# Что произойдет:
-# 1. Получит все файлы из 3 коммитов + незафиксированные
-# 2. Загрузит их в конфигурацию
-# 3. Обновит конфигурацию БД
-# 4. Запустит 1С с открытой формой документа
-```
-
-## Структура каталогов
-
-Рекомендуемая структура проекта:
-
-```
-project/
-├── config/                 # Выгруженная конфигурация
-│   ├── Catalogs/
-│   ├── Documents/
-│   ├── Reports/
-│   └── ...
-├── partial-load-config.ps1
-├── partial-load-config.cmd
-└── README_partial_load.md
-```
 
 ## Коды возврата
 
@@ -820,6 +795,12 @@ git commit -m "Обновление конфигурации"
 - Путь к временным файлам (не удаляются)
 
 ## История изменений
+
+### Версия 6.0 (ноябрь 2025)
+- ✅ **Короткие команды** - `loadcfg` и `dumpcfg` для быстрого доступа
+- ✅ **Реорганизация проекта** - все скрипты в каталоге `scripts/`
+- ✅ **Упрощенный синтаксис** - позиционные параметры для режимов выгрузки
+- ✅ Обновлена документация с примерами коротких команд
 
 ### Версия 5.0 (ноябрь 2025)
 - ✅ **Добавлена выгрузка конфигурации** - три режима (Full, Changes, Partial)
