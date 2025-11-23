@@ -21,8 +21,66 @@ REM Определяем каталог скрипта
 set "SCRIPT_DIR=%~dp0"
 set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
-REM Путь к основному PowerShell скрипту
-set "PS_SCRIPT=%SCRIPT_DIR%\scripts\dump-config.ps1"
+REM Обработка параметров - ищем режим и -objects
+set "MODE="
+set "USE_PARTIAL_SCRIPT=0"
+set "PARAMS="
+set "FIRST_PARAM=%~1"
+
+REM Проверяем первый параметр на режим
+if not "%FIRST_PARAM%"=="" (
+    if /i "%FIRST_PARAM%"=="Full" (
+        set "MODE=Full"
+        shift
+    ) else if /i "%FIRST_PARAM%"=="Changes" (
+        set "MODE=Changes"
+        shift
+    ) else if /i "%FIRST_PARAM%"=="Partial" (
+        set "MODE=Partial"
+        set "USE_PARTIAL_SCRIPT=1"
+        shift
+    )
+)
+
+REM Собираем остальные параметры и проверяем наличие -objects или -mode Partial
+:parse_params
+if "%~1"=="" goto determine_script
+
+if /i "%~1"=="-mode" (
+    set "nextparam=%~2"
+    if /i "!nextparam!"=="Partial" (
+        set "USE_PARTIAL_SCRIPT=1"
+        set "MODE=Partial"
+    ) else (
+        set "MODE=!nextparam!"
+    )
+    shift
+    shift
+    goto parse_params
+)
+
+if /i "%~1"=="-objects" (
+    REM Для -objects используем dump-partial-config.ps1
+    set "USE_PARTIAL_SCRIPT=1"
+    set "PARAMS=!PARAMS! -ObjectNames %2"
+    shift
+    shift
+    goto parse_params
+)
+
+REM Все остальные параметры передаем как есть
+set "PARAMS=!PARAMS! %1"
+shift
+goto parse_params
+
+:determine_script
+REM Определяем какой скрипт использовать
+if "!USE_PARTIAL_SCRIPT!"=="1" (
+    set "PS_SCRIPT=%SCRIPT_DIR%\scripts\dump-partial-config.ps1"
+) else (
+    set "PS_SCRIPT=%SCRIPT_DIR%\scripts\dump-config.ps1"
+    if not "!MODE!"=="" set "PARAMS=-Mode !MODE! !PARAMS!"
+)
 
 REM Проверяем существование скрипта
 if not exist "%PS_SCRIPT%" (
@@ -30,38 +88,9 @@ if not exist "%PS_SCRIPT%" (
     exit /b 1
 )
 
-REM Обработка первого параметра как режима (если это не флаг)
-set "PARAMS="
-set "FIRST_PARAM=%~1"
-if not "%FIRST_PARAM%"=="" (
-    REM Проверяем, является ли первый параметр режимом (Full/Changes/Partial)
-    if /i "%FIRST_PARAM%"=="Full" (
-        set "PARAMS=-Mode Full"
-        shift
-        goto parse_remaining
-    )
-    if /i "%FIRST_PARAM%"=="Changes" (
-        set "PARAMS=-Mode Changes"
-        shift
-        goto parse_remaining
-    )
-    if /i "%FIRST_PARAM%"=="Partial" (
-        set "PARAMS=-Mode Partial"
-        shift
-        goto parse_remaining
-    )
-)
-
-REM Передаем остальные параметры командной строки
-:parse_remaining
-if "%~1"=="" goto run_script
-set "PARAMS=%PARAMS% %1"
-shift
-goto parse_remaining
-
 :run_script
 REM Запускаем PowerShell скрипт
-powershell.exe -ExecutionPolicy Bypass -File "%PS_SCRIPT%" %PARAMS%
+powershell.exe -ExecutionPolicy Bypass -File "%PS_SCRIPT%" !PARAMS!
 
 REM Возвращаем код возврата из PowerShell
 exit /b %ERRORLEVEL%
