@@ -3,6 +3,12 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 REM ============================================================================
+REM DEPRECATED: Use loadcfg.cmd instead (located in project root)
+REM ----------------------------------------------------------------------------
+REM This script is kept for backward compatibility.
+REM New projects should use: loadcfg.cmd
+REM ============================================================================
+REM
 REM Скрипт частичной загрузки конфигурации 1С из файлов по коммиту git
 REM ============================================================================
 REM
@@ -267,7 +273,7 @@ set "TEMP_LIST=!TEMP_DIR!\temp_list.txt"
 if exist "!TEMP_LIST!" del "!TEMP_LIST!"
 
 REM Обрабатываем файлы построчно (используем PowerShell для обработки)
-powershell -NoProfile -ExecutionPolicy Bypass -File "process-config-files.ps1" -ChangedFilesPath "!TEMP_DIR!\\changed_files.txt" -ConfigDir "!CONFIG_DIR!" -TempList "!TEMP_LIST!" -DebugMode "!DEBUG_MODE!"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0process-config-files.ps1" -ChangedFilesPath "!TEMP_DIR!\\changed_files.txt" -ConfigDir "!CONFIG_DIR!" -TempList "!TEMP_LIST!" -DebugMode "!DEBUG_MODE!"
 
 REM Подсчитываем количество файлов
 if exist "!TEMP_LIST!" (
