@@ -524,7 +524,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 
 ## См. также
 
-- [Документация 1С: Командная строка](https://its.1c.ru/)
+- [Документация 1С: Командная строка](https://its.1c.ru/db/v8324doc#bookmark:adm:TI000000527)
 - [Git документация](https://git-scm.com/doc)
 - Параметр `/LoadConfigFromFiles` (строка 1070 в документации)
 
