@@ -208,20 +208,30 @@ DUMP_CHANGES_FILE=config_changes.txt
 
 ⚠️ **Не храните пароли в .env файле!** Файл `.env` добавлен в `.gitignore`, но для дополнительной безопасности рекомендуется передавать пароль через параметр командной строки:
 
+```cmd
+REM Короткая команда
+loadcfg HEAD -Password "your_password"
+```
+
 ```powershell
-.\partial-load-config.ps1 -CommitId "HEAD" -Password "your_password"
+# PowerShell скрипт напрямую
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" -Password "your_password"
 ```
 
 ### Использование с .env
 
-После настройки `.env` можно запускать скрипт без указания базовых параметров:
+После настройки `.env` можно запускать команды без указания базовых параметров:
+
+```cmd
+REM Короткие команды (рекомендуется)
+loadcfg HEAD
+dumpcfg Changes
+```
 
 ```powershell
-# Параметры подключения берутся из .env
-.\partial-load-config.ps1 -CommitId "HEAD"
-
-# Переопределение параметров из .env
-.\partial-load-config.ps1 -CommitId "HEAD" -ConfigDir "config" -UpdateDB
+# PowerShell скрипты напрямую
+.\scripts\partial-load-config.ps1 -CommitId "HEAD"
+.\scripts\dump-changes-config.ps1
 ```
 
 ## Использование
@@ -434,8 +444,15 @@ loadcfg HEAD -UpdateDB -RunEnterprise
 
 При возникновении проблем используйте параметр `-DebugMode`:
 
+```cmd
+REM Короткая команда
+loadcfg HEAD -DebugMode
+dumpcfg -DebugMode
+```
+
 ```powershell
-.\partial-load-config.ps1 -CommitId "HEAD" -InfoBasePath "C:\Bases\Test" -DebugMode
+# PowerShell скрипт напрямую
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" -InfoBasePath "C:\Bases\Test" -DebugMode
 ```
 
 Это выведет:
@@ -516,8 +533,14 @@ $arguments += "-Extension", "`"MyExtension`""
 
 **Реализовано!** Используйте параметр `-UpdateDB`:
 
+```cmd
+REM Короткая команда
+loadcfg HEAD -UpdateDB
+```
+
 ```powershell
-.\partial-load-config.ps1 -CommitId "HEAD" `
+# PowerShell скрипт напрямую (с явными параметрами)
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" `
     -InfoBasePath "C:\Bases\MyBase" `
     -UpdateDB
 ```
@@ -526,31 +549,37 @@ $arguments += "-Extension", "`"MyExtension`""
 
 **Реализовано!** Используйте параметр `-RunEnterprise`:
 
-```powershell
-# Простой запуск
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -RunEnterprise
+```cmd
+REM Простой запуск
+loadcfg HEAD -RunEnterprise
 
-# С открытием конкретного объекта
-.\partial-load-config.ps1 -CommitId "HEAD" `
+REM С открытием конкретного объекта
+loadcfg HEAD -RunEnterprise -NavigationLink "e1cib/data/Catalog.Items"
+
+REM С запуском внешней обработки
+loadcfg HEAD -RunEnterprise -ExternalDataProcessor "C:\Tools\MyProcessor.epf"
+```
+
+```powershell
+# PowerShell скрипт напрямую (с явными параметрами)
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" `
     -InfoBasePath "C:\Bases\MyBase" `
     -RunEnterprise `
     -NavigationLink "e1cib/data/Catalog.Items"
-
-# С запуском внешней обработки
-.\partial-load-config.ps1 -CommitId "HEAD" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -RunEnterprise `
-    -ExternalDataProcessor "C:\Tools\MyProcessor.epf"
 ```
 
 ### Комплексный сценарий
 
 Загрузка, обновление БД и запуск с открытием объекта:
 
+```cmd
+REM Короткая команда (параметры из .env)
+loadcfg HEAD -UpdateDB -RunEnterprise -NavigationLink "e1cib/data/Document.SalesOrder"
+```
+
 ```powershell
-.\partial-load-config.ps1 -CommitId "HEAD" `
+# PowerShell скрипт напрямую (с явными параметрами)
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" `
     -InfoBasePath "C:\edt\IB\ERP_2.5.12.73" `
     -ConfigDir "src" `
     -UserName "Администратор" `
@@ -610,12 +639,15 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 
 Выгружает всю конфигурацию целиком.
 
-```powershell
-# Используя обертку
-.\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+```cmd
+REM Короткая команда
+dumpcfg Full
+```
 
-# Используя универсальный скрипт
-.\dump-config.ps1 -Mode Full -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+```powershell
+# PowerShell скрипты напрямую (с явными параметрами)
+.\scripts\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+.\scripts\dump-config.ps1 -Mode Full -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
 ```
 
 **Использование:**
@@ -627,17 +659,25 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 
 Выгружает только измененные объекты относительно предыдущей выгрузки.
 
+```cmd
+REM Короткая команда
+dumpcfg Changes
+
+REM С сохранением списка изменений (если не настроено в .env)
+dumpcfg Changes -ChangesFile "changes.txt"
+```
+
 ```powershell
-# Используя обертку
-.\dump-changes-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
+# PowerShell скрипты напрямую (с явными параметрами)
+.\scripts\dump-changes-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\MyBase"
 
 # С сохранением списка изменений
-.\dump-changes-config.ps1 -ConfigDir "src" `
+.\scripts\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase" `
     -ChangesFile "changes.txt"
 
 # Сравнение с другой выгрузкой
-.\dump-changes-config.ps1 -ConfigDir "src" `
+.\scripts\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase" `
     -CompareWith "old_dump\ConfigDumpInfo.xml" `
     -Force
@@ -655,20 +695,33 @@ powershell.exe -ExecutionPolicy Bypass -File .\partial-load-config.ps1 -CommitId
 Выгружает только конкретные объекты, указанные либо в файле, либо напрямую в командной строке.
 
 **Способ 1: Указание объектов в файле**
+```cmd
+REM Короткая команда (файл из .env: DUMP_OBJECTS_LIST)
+dumpcfg Partial
+```
+
 ```powershell
-# Используя обертку с файлом
-.\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" `
+# PowerShell скрипт напрямую (с явными параметрами)
+.\scripts\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" `
     -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase"
 ```
 
 **Способ 2: Указание объектов в параметре**
-```powershell
-# Выгрузка одного объекта
-.\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура" -InfoBaseName "MyBase"
+```cmd
+REM Короткая команда - выгрузка одного объекта
+dumpcfg -mode Partial -objects "Справочник.Номенклатура"
 
-# Выгрузка нескольких объектов (важно: в двойных кавычках, без пробелов у запятой)
-.\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура,Документ.РеализацияТоваровУслуг" `
+REM Выгрузка нескольких объектов (важно: в двойных кавычках, без пробелов у запятой)
+dumpcfg -mode Partial -objects "Справочник.Номенклатура,Документ.РеализацияТоваровУслуг"
+```
+
+```powershell
+# PowerShell скрипт напрямую
+.\scripts\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура" -InfoBaseName "MyBase"
+
+# Выгрузка нескольких объектов
+.\scripts\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура,Документ.РеализацияТоваровУслуг" `
     -InfoBasePath "C:\Bases\MyBase" `
     -DebugMode
 ```
@@ -740,12 +793,16 @@ DUMP_CHANGES_FILE=config_changes.txt
 
 После настройки `.env` запуск упрощается:
 
-```powershell
-# Параметры берутся из .env
-.\dump-changes-config.ps1
+```cmd
+REM Короткие команды (рекомендуется)
+dumpcfg                  :: использует DUMP_MODE из .env
+dumpcfg Full             :: переопределяет режим
+```
 
-# Переопределение параметров из .env
-.\dump-full-config.ps1 -OutputDir "config_backup"
+```powershell
+# PowerShell скрипты напрямую
+.\scripts\dump-changes-config.ps1
+.\scripts\dump-full-config.ps1 -ConfigDir "config_backup"
 ```
 
 ## Примеры использования
@@ -754,76 +811,78 @@ DUMP_CHANGES_FILE=config_changes.txt
 
 Это основной сценарий работы с системой контроля версий.
 
+```cmd
+REM Короткие команды (рекомендуется, параметры из .env)
+dumpcfg Full
+REM ... работа в конфигураторе, внесение изменений ...
+
+REM Выгрузка только изменений
+dumpcfg Changes
+
+REM Фиксация в git
+git add .
+git commit -m "Добавлен новый справочник"
+```
+
 ```powershell
-# Шаг 1: Первая (или базовая) полная выгрузка
-.\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Dev"
+# PowerShell скрипты напрямую (с явными параметрами)
+.\scripts\dump-full-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Dev"
 
-# ... работа в конфигураторе, внесение изменений ...
+# ... работа в конфигураторе ...
 
-# Шаг 2: Выгрузка только изменений
-# Будут выгружены измененные файлы и создан/перезаписан 'changes.txt'
-.\dump-changes-config.ps1 -ConfigDir "src" `
+# Выгрузка только изменений
+.\scripts\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\Dev" `
     -ChangesFile "changes.txt"
 
-# ... анализ изменений, коммит в Git ...
 git add .
 git commit -m "Добавлен новый справочник"
 
-# Шаг 3: Обновление файла состояния
-# "Фиксируем" текущее состояние как новую точку отсчета для следующих выгрузок
-.\update-dump-info.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Dev"
-
-# ... после этого повторный запуск dump-changes-config.ps1 не покажет изменений до тех пор,
-# пока в конфигурации не появится что-то новое.
+# Обновление файла состояния (опционально)
+.\scripts\update-dump-info.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Dev"
 ```
 
-### Сценарий 2: Выгрузка для анализа с AI
+### Сценарий 2: Выгрузка конкретных объектов
 
-```powershell
-# Выгружаем только измененные объекты
-.\dump-changes-config.ps1 -ConfigDir "export_for_ai" `
-    -InfoBasePath "C:\Bases\MyBase" `
-    -ChangesFile "what_changed.txt" `
-    -DebugMode
-
-# Читаем что изменилось
-Get-Content what_changed.txt
-
-# Анализируем выгруженные файлы с помощью AI-ассистента
+```cmd
+REM Короткая команда - передаем объекты напрямую
+dumpcfg -mode Partial -objects "Справочник.Номенклатура,Отчет.АнализПродаж"
 ```
 
-### Сценарий 3: Выгрузка конкретных объектов
-
 ```powershell
-# Способ А: Создаем список объектов в файле
+# PowerShell - создаем список в файле
 @"
 Справочник.Номенклатура
 Документ.РеализацияТоваровУслуг
 Отчет.АнализПродаж
 "@ | Out-File dump_objects.txt -Encoding UTF8
 
-# Выгружаем только эти объекты из файла
-.\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" `
+# Выгружаем из файла
+.\scripts\dump-partial-config.ps1 -ObjectsListFile "dump_objects.txt" `
     -ConfigDir "selected_objects" `
     -InfoBasePath "C:\Bases\MyBase"
 
-# Способ Б: Передаем объекты напрямую
-.\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура", "Отчет.АнализПродаж" `
+# Или передаем объекты напрямую
+.\scripts\dump-partial-config.ps1 -ObjectNames "Справочник.Номенклатура", "Отчет.АнализПродаж" `
     -ConfigDir "selected_objects" `
     -InfoBasePath "C:\Bases\MyBase"
 ```
 
-### Сценарий 4: Выгрузка расширений
+### Сценарий 3: Выгрузка расширений
+
+```cmd
+REM Короткая команда
+dumpcfg Full -Extension "MyExtension"
+dumpcfg Full -AllExtensions
+```
 
 ```powershell
-# Выгрузка конкретного расширения
-.\dump-full-config.ps1 -ConfigDir "extensions\MyExtension" `
+# PowerShell скрипты напрямую
+.\scripts\dump-full-config.ps1 -ConfigDir "extensions\MyExtension" `
     -InfoBasePath "C:\Bases\MyBase" `
     -Extension "MyExtension"
 
-# Выгрузка всех расширений
-.\dump-full-config.ps1 -ConfigDir "all_extensions" `
+.\scripts\dump-full-config.ps1 -ConfigDir "all_extensions" `
     -InfoBasePath "C:\Bases\MyBase" `
     -AllExtensions
 ```
@@ -832,16 +891,23 @@ Get-Content what_changed.txt
 
 Скрипты выгрузки и загрузки дополняют друг друга:
 
-```powershell
-# 1. Выгружаем конфигурацию из базы в файлы
-.\dump-changes-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Prod"
-
-# 2. Фиксируем в git
+```cmd
+REM Короткие команды (параметры из .env)
+dumpcfg Changes
 git add src
 git commit -m "Обновление конфигурации"
 
-# 3. В другой базе загружаем изменения
-.\partial-load-config.ps1 -CommitId "HEAD" `
+loadcfg HEAD -UpdateDB
+```
+
+```powershell
+# PowerShell скрипты напрямую (с явными параметрами)
+.\scripts\dump-changes-config.ps1 -ConfigDir "src" -InfoBasePath "C:\Bases\Prod"
+git add src
+git commit -m "Обновление конфигурации"
+
+# Загружаем в конфигурацию информацонной базы
+.\scripts\partial-load-config.ps1 -CommitId "HEAD" `
     -ConfigDir "src" `
     -InfoBasePath "C:\Bases\Dev" `
     -UpdateDB
@@ -851,8 +917,14 @@ git commit -m "Обновление конфигурации"
 
 При возникновении проблем используйте параметр `-DebugMode`:
 
+```cmd
+REM Короткая команда
+dumpcfg -DebugMode
+```
+
 ```powershell
-.\dump-changes-config.ps1 -ConfigDir "src" `
+# PowerShell скрипт напрямую
+.\scripts\dump-changes-config.ps1 -ConfigDir "src" `
     -InfoBasePath "C:\Bases\MyBase" `
     -DebugMode
 ```
